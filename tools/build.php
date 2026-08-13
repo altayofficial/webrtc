@@ -16,7 +16,7 @@ const ROOT = __DIR__ . "/..";
 
 $packages = json_decode(file_get_contents(__DIR__ . "/packages.json"), true, flags: JSON_THROW_ON_ERROR);
 
-$workDir = sys_get_temp_dir() . "/webrtc-php81-build";
+$workDir = sys_get_temp_dir() . "/webrtc-downgrade-build";
 run("rm -rf " . escapeshellarg($workDir) . " " . escapeshellarg(ROOT . "/src") . " " . escapeshellarg(ROOT . "/licenses"));
 mkdir($workDir, 0777, true);
 mkdir(ROOT . "/src", 0777, true);
@@ -117,7 +117,7 @@ $flatRequires["symfony/polyfill-php84"] = "^1.31";
 ksort($flatRequires);
 
 file_put_contents(ROOT . "/composer.json", json_encode([
-	"name" => "altayofficial/webrtc-php81",
+	"name" => "altayofficial/webrtc",
 	"description" => "PHP-WebRTC downgraded to run on PHP 8.1 and later. Generated - see tools/build.php.",
 	"type" => "library",
 	"license" => array_keys($licenseNames),

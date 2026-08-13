@@ -1,4 +1,4 @@
-# webrtc-php81
+# webrtc
 
 [PHP-WebRTC](https://github.com/PHP-WebRTC) rebuilt to run on PHP 8.1 and later.
 
@@ -12,7 +12,7 @@ upstream needs no changes.
 ## Usage
 
 ```
-composer require altayofficial/webrtc-php81
+composer require altayofficial/webrtc
 ```
 
 The package declares `replace` for all 22 upstream packages, so Composer will not install them

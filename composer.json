@@ -1,5 +1,5 @@
 {
-    "name": "altayofficial/webrtc-php81",
+    "name": "altayofficial/webrtc",
     "description": "PHP-WebRTC downgraded to run on PHP 8.1 and later. Generated - see tools/build.php.",
     "type": "library",
     "license": [

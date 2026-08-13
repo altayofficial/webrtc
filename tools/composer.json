@@ -1,6 +1,6 @@
 {
-  "name": "altayofficial/webrtc-php81-tools",
-  "description": "Build tooling for the webrtc-php81 downgrade. Not shipped with the package.",
+  "name": "altayofficial/webrtc-tools",
+  "description": "Build tooling for the webrtc downgrade. Not shipped with the package.",
   "type": "project",
   "license": "GPL-3.0-or-later",
   "require": {
