@@ -1,0 +1,178 @@
+[
+    {
+        "name": "quasarstream/av",
+        "repository": "https://github.com/PHP-WebRTC/av.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\AVCodec\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/codecs",
+        "repository": "https://github.com/PHP-WebRTC/codec.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\Codecs\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/datachannel",
+        "repository": "https://github.com/PHP-WebRTC/datachannel.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\DataChannel\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/dtls",
+        "repository": "https://github.com/PHP-WebRTC/dtls.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\DTLS\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/exception",
+        "repository": "https://github.com/PHP-WebRTC/exception.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\Exception\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/ice",
+        "repository": "https://github.com/PHP-WebRTC/ice.git",
+        "version": "v1.0.3",
+        "psr4": {
+            "Webrtc\\ICE\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/mdns",
+        "repository": "https://github.com/PHP-WebRTC/mdns.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\MDNS\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/mixin",
+        "repository": "https://github.com/PHP-WebRTC/mixin.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\Mixin\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/ntp",
+        "repository": "https://github.com/PHP-WebRTC/ntp.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\NTP\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/opus",
+        "repository": "https://github.com/PHP-WebRTC/opus.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\Opus\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/rtcp",
+        "repository": "https://github.com/PHP-WebRTC/rtcp.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\RTCP\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/rtp",
+        "repository": "https://github.com/PHP-WebRTC/rtp.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\RTP\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/rtp-parameter",
+        "repository": "https://github.com/PHP-WebRTC/rtpparameter.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\RTPParameter\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/sctp",
+        "repository": "https://github.com/PHP-WebRTC/sctp.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\SCTP\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/sdp",
+        "repository": "https://github.com/PHP-WebRTC/sdp.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\SDP\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/srtp",
+        "repository": "https://github.com/PHP-WebRTC/srtp.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\Srtp\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/ssl",
+        "repository": "https://github.com/PHP-WebRTC/ssl.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\SSL\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/stats",
+        "repository": "https://github.com/PHP-WebRTC/stats.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\Stats\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/stun",
+        "repository": "https://github.com/PHP-WebRTC/stun.git",
+        "version": "v1.0.1",
+        "psr4": {
+            "Webrtc\\STUN\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/turn",
+        "repository": "https://github.com/PHP-WebRTC/turn.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\TURN\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/vpx",
+        "repository": "https://github.com/PHP-WebRTC/vpx.git",
+        "version": "v1.0.0",
+        "psr4": {
+            "Webrtc\\VPX\\": "src"
+        }
+    },
+    {
+        "name": "quasarstream/webrtc",
+        "repository": "https://github.com/PHP-WebRTC/webrtc.git",
+        "version": "v1.0.3",
+        "psr4": {
+            "Webrtc\\Webrtc\\": "src"
+        }
+    }
+]

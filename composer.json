@@ -1,0 +1,77 @@
+{
+    "name": "altayofficial/webrtc-php81",
+    "description": "PHP-WebRTC downgraded to run on PHP 8.1 and later. Generated - see tools/build.php.",
+    "type": "library",
+    "license": [
+        "BSD-3-Clause",
+        "MIT"
+    ],
+    "require": {
+        "evenement/evenement": "^3.0",
+        "ext-ffi": "*",
+        "ext-gmp": "*",
+        "php": "^8.1",
+        "psr/log": "^3.0",
+        "ramsey/uuid": "^4.7",
+        "react/async": "^4.3",
+        "react/datagram": "^1.10",
+        "react/dns": "^1.13",
+        "react/event-loop": "^1.5",
+        "react/promise": "^3.2",
+        "react/socket": "^1.16",
+        "symfony/polyfill-php84": "^1.31"
+    },
+    "replace": {
+        "quasarstream/av": "v1.0.0",
+        "quasarstream/codecs": "v1.0.0",
+        "quasarstream/datachannel": "v1.0.0",
+        "quasarstream/dtls": "v1.0.0",
+        "quasarstream/exception": "v1.0.0",
+        "quasarstream/ice": "v1.0.3",
+        "quasarstream/mdns": "v1.0.0",
+        "quasarstream/mixin": "v1.0.0",
+        "quasarstream/ntp": "v1.0.0",
+        "quasarstream/opus": "v1.0.0",
+        "quasarstream/rtcp": "v1.0.0",
+        "quasarstream/rtp": "v1.0.0",
+        "quasarstream/rtp-parameter": "v1.0.0",
+        "quasarstream/sctp": "v1.0.0",
+        "quasarstream/sdp": "v1.0.0",
+        "quasarstream/srtp": "v1.0.0",
+        "quasarstream/ssl": "v1.0.0",
+        "quasarstream/stats": "v1.0.0",
+        "quasarstream/stun": "v1.0.1",
+        "quasarstream/turn": "v1.0.0",
+        "quasarstream/vpx": "v1.0.0",
+        "quasarstream/webrtc": "v1.0.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webrtc\\AVCodec\\": "src/av/src/",
+            "Webrtc\\Codecs\\": "src/codecs/src/",
+            "Webrtc\\DTLS\\": "src/dtls/src/",
+            "Webrtc\\DataChannel\\": "src/datachannel/src/",
+            "Webrtc\\Exception\\": "src/exception/src/",
+            "Webrtc\\ICE\\": "src/ice/src/",
+            "Webrtc\\MDNS\\": "src/mdns/src/",
+            "Webrtc\\Mixin\\": "src/mixin/src/",
+            "Webrtc\\NTP\\": "src/ntp/src/",
+            "Webrtc\\Opus\\": "src/opus/src/",
+            "Webrtc\\RTCP\\": "src/rtcp/src/",
+            "Webrtc\\RTPParameter\\": "src/rtp-parameter/src/",
+            "Webrtc\\RTP\\": "src/rtp/src/",
+            "Webrtc\\SCTP\\": "src/sctp/src/",
+            "Webrtc\\SDP\\": "src/sdp/src/",
+            "Webrtc\\SSL\\": "src/ssl/src/",
+            "Webrtc\\STUN\\": "src/stun/src/",
+            "Webrtc\\Srtp\\": "src/srtp/src/",
+            "Webrtc\\Stats\\": "src/stats/src/",
+            "Webrtc\\TURN\\": "src/turn/src/",
+            "Webrtc\\VPX\\": "src/vpx/src/",
+            "Webrtc\\Webrtc\\": "src/webrtc/src/"
+        },
+        "classmap": [
+            "src/turn/src/Trait/TurnConnection.php"
+        ]
+    }
+}

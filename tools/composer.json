@@ -1,0 +1,15 @@
+{
+  "name": "altayofficial/webrtc-php81-tools",
+  "description": "Build tooling for the webrtc-php81 downgrade. Not shipped with the package.",
+  "type": "project",
+  "license": "GPL-3.0-or-later",
+  "require": {
+    "php": "^8.2",
+    "rector/rector": "^2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Altay\\WebrtcDowngrade\\": "src/"
+    }
+  }
+}

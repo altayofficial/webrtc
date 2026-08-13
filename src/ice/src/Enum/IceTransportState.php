@@ -1,0 +1,22 @@
+<?php
+
+/**
+ * This file is part of the PHP WebRTC package.
+ *
+ * (c) Amin Yazdanpanah <https://www.aminyazdanpanah.com/#contact>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Webrtc\ICE\Enum;
+
+enum IceTransportState: int
+{
+    case complete = 0;
+    case gathering = 1;
+    case new = 2;
+    case closed = 3;
+    case failed = 4;
+    case checking = 5;
+}

@@ -1,0 +1,24 @@
+<?php
+
+/**
+ * This file is part of the PHP WebRTC package.
+ *
+ * (c) Amin Yazdanpanah <https://www.aminyazdanpanah.com/#contact>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Webrtc\RTPParameter;
+use Webrtc\Mixin\DataClass;
+
+#[DataClass]
+class RTCRtpRtxParameters
+{
+    /**
+     * @param int $ssrc The Synchronization Source identifier.
+     */
+    public function __construct(public readonly int $ssrc)
+    {
+    }
+}

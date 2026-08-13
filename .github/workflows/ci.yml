@@ -1,0 +1,48 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  runtime:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.1", "8.2", "8.3", "8.4"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ffi, gmp, sockets
+
+      - run: composer install --no-interaction --no-progress
+
+      # A parse error is the failure mode a downgrade regression produces, so every
+      # shipped file is linted by the interpreter itself.
+      - name: Lint sources
+        run: find src -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Load every class
+        run: php tools/smoke.php
+
+  rebuild:
+    name: src/ is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: ffi, gmp
+
+      - run: composer install --no-interaction --no-progress -d tools
+      - run: php tools/build.php
+
+      # The build is deterministic, so a dirty tree means src/ was edited by hand or
+      # the pinned upstream tag moved.
+      - name: Check for drift
+        run: git diff --exit-code
