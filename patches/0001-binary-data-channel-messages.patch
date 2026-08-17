@@ -1,0 +1,52 @@
+diff --git a/src/datachannel/src/RTCDataChannel.php b/src/datachannel/src/RTCDataChannel.php
+index 2271ae4..0c904d1 100644
+--- a/src/datachannel/src/RTCDataChannel.php
++++ b/src/datachannel/src/RTCDataChannel.php
+@@ -257,13 +257,13 @@ class RTCDataChannel extends EventEmitter implements RTCDataChannelInterface
+      * @param string $data The binary or text data to send
+      * @throws RuntimeException If a channel is not in open state
+      */
+-    public function send(string $data): void
++    public function send(string $data, bool $binary = false): void
+     {
+         if ($this->readyState != State::Open) {
+             throw new RuntimeException("Data channel is not open");
+         }
+ 
+-        $this->transport->dataChannelSend($this, $data);
++        $this->transport->dataChannelSend($this, $data, $binary);
+     }
+ 
+     /**
+diff --git a/src/sctp/src/Trait/DataChannel.php b/src/sctp/src/Trait/DataChannel.php
+index 2950ab6..9ed2cc9 100644
+--- a/src/sctp/src/Trait/DataChannel.php
++++ b/src/sctp/src/Trait/DataChannel.php
+@@ -653,6 +653,7 @@ trait DataChannel
+      *
+      * @param RTCDataChannel $channel The channel to send data over.
+      * @param string $data The data to send.
++     * @param bool $binary Send as a binary message instead of guessing the type from the payload.
+      * @throws OpenSSLException
+      * @throws SSLException
+      * @throws SysCallException
+@@ -662,9 +663,17 @@ trait DataChannel
+      * @throws WantX509LookupException
+      * @throws ZeroReturnException
+      */
+-    public function dataChannelSend(RTCDataChannel $channel, string $data): void
++    public function dataChannelSend(RTCDataChannel $channel, string $data, bool $binary = false): void
+     {
+-        if ($data === "") {
++        if ($binary) {
++            if ($data === "") {
++                $ppId = SctpConstant::WEBRTC_BINARY_EMPTY;
++                $userData = "\x00";
++            } else {
++                $ppId = SctpConstant::WEBRTC_BINARY;
++                $userData = $data;
++            }
++        } elseif ($data === "") {
+             $ppId = SctpConstant::WEBRTC_STRING_EMPTY;
+             $userData = "\x00";
+         } elseif (mb_check_encoding($data, 'UTF-8')) {

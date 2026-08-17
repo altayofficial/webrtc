@@ -653,6 +653,7 @@ trait DataChannel
      *
      * @param RTCDataChannel $channel The channel to send data over.
      * @param string $data The data to send.
+     * @param bool $binary Send as a binary message instead of guessing the type from the payload.
      * @throws OpenSSLException
      * @throws SSLException
      * @throws SysCallException
@@ -662,9 +663,17 @@ trait DataChannel
      * @throws WantX509LookupException
      * @throws ZeroReturnException
      */
-    public function dataChannelSend(RTCDataChannel $channel, string $data): void
+    public function dataChannelSend(RTCDataChannel $channel, string $data, bool $binary = false): void
     {
-        if ($data === "") {
+        if ($binary) {
+            if ($data === "") {
+                $ppId = SctpConstant::WEBRTC_BINARY_EMPTY;
+                $userData = "\x00";
+            } else {
+                $ppId = SctpConstant::WEBRTC_BINARY;
+                $userData = $data;
+            }
+        } elseif ($data === "") {
             $ppId = SctpConstant::WEBRTC_STRING_EMPTY;
             $userData = "\x00";
         } elseif (mb_check_encoding($data, 'UTF-8')) {

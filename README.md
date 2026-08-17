@@ -35,6 +35,18 @@ at it. That companion does not match its file name, so the build classmaps the a
 
 Nothing in `src/` is edited by hand.
 
+## Patches
+
+`patches/` holds unified diffs applied to the downgraded sources at the end of the build, in file
+name order. They exist for changes upstream does not carry yet:
+
+| Patch | What it does |
+| --- | --- |
+| `0001-binary-data-channel-messages.patch` | Adds a `$binary` parameter to `RTCDataChannel::send()` and `dataChannelSend()`. Without it the SCTP transport guesses the payload type and sends anything that happens to be valid UTF-8 as a WebRTC string, transcoding every byte above 0x7f - which corrupts binary protocols. |
+
+To add one, edit `src/` after a build, run `git diff > patches/<name>.patch`, and keep the edit in
+place. Patches are written against the downgraded sources, so a rebuild applies them after Rector.
+
 ## Rebuilding
 
 ```

@@ -257,13 +257,13 @@ class RTCDataChannel extends EventEmitter implements RTCDataChannelInterface
      * @param string $data The binary or text data to send
      * @throws RuntimeException If a channel is not in open state
      */
-    public function send(string $data): void
+    public function send(string $data, bool $binary = false): void
     {
         if ($this->readyState != State::Open) {
             throw new RuntimeException("Data channel is not open");
         }
 
-        $this->transport->dataChannelSend($this, $data);
+        $this->transport->dataChannelSend($this, $data, $binary);
     }
 
     /**

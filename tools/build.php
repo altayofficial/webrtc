@@ -4,8 +4,9 @@
  * Rebuilds src/ and composer.json from the upstream PHP-WebRTC packages.
  *
  * Each package is cloned at its pinned tag, its sources are copied under src/<package>/, and
- * Rector then downgrades the whole tree to PHP 8.1. Nothing here is edited by hand - to pick up
- * a new upstream release, bump the version in packages.json and run this again.
+ * Rector then downgrades the whole tree to PHP 8.1. Finally every patch in patches/ is applied.
+ * Nothing here is edited by hand - to pick up a new upstream release, bump the version in
+ * packages.json and run this again; to change the generated sources, add a patch.
  *
  * Usage: php tools/build.php
  */
@@ -90,6 +91,14 @@ ksort($licenseNames);
 
 echo "==> rector\n";
 run(sprintf("cd %s && vendor/bin/rector process --config rector.php --no-progress-bar --no-diffs", escapeshellarg(__DIR__)));
+
+//the patches are written against the downgraded sources, so they only apply once Rector is done
+$patches = glob(ROOT . "/patches/*.patch") ?: [];
+sort($patches);
+foreach($patches as $patch){
+	echo "==> patch " . basename($patch) . "\n";
+	run(sprintf("cd %s && git apply %s", escapeshellarg(ROOT), escapeshellarg($patch)));
+}
 
 //MoveTraitConstantsRector emits a companion class beside the trait it came from, which PSR-4
 //cannot find because the file is named after the trait. Classmap just those files.
