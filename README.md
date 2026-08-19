@@ -15,8 +15,22 @@ upstream needs no changes.
 composer require altayofficial/webrtc
 ```
 
-The package declares `replace` for all 22 upstream packages, so Composer will not install them
-alongside it and the namespaces cannot collide.
+The package declares `replace` for all 22 upstream packages - including the media ones it does not
+ship - so Composer will not install them alongside it and the namespaces cannot collide.
+
+## Data channels only
+
+Altay uses WebRTC for NetherNet, which is a data channel transport, so the audio/video half of
+upstream is left out. `av`, `codecs`, `opus`, `vpx`, `rtp`, `rtcp` and `srtp` are not built, and
+with them go the FFI bindings to libav, libopus, libvpx and libsrtp2.
+
+Dropping them from `tools/packages.json` is not enough on its own - the core packages still
+referenced media types - so `0002-data-channel-only.patch` strips those paths. `RTCPeerConnection`
+loses `addTrack()`, `addTransceiver()`, senders, receivers, transceivers and codec negotiation;
+`RTCDtlsTransport` loses SRTP setup and RTP/RTCP demultiplexing. The data channel API is unchanged.
+
+The DTLS handshake still advertises the `use_srtp` extension, with the profile list inlined in
+`TLS`, so it stays byte compatible with peers that offer media - it just never negotiates any.
 
 ## What the downgrade touches
 
@@ -43,6 +57,7 @@ name order. They exist for changes upstream does not carry yet:
 | Patch | What it does |
 | --- | --- |
 | `0001-binary-data-channel-messages.patch` | Adds a `$binary` parameter to `RTCDataChannel::send()` and `dataChannelSend()`. Without it the SCTP transport guesses the payload type and sends anything that happens to be valid UTF-8 as a WebRTC string, transcoding every byte above 0x7f - which corrupts binary protocols. |
+| `0002-data-channel-only.patch` | Removes the media paths from `RTCPeerConnection`, `RTCPeerConnectionInterface`, `RTCDtlsTransport` and `TLS`, and deletes `Webrtc\DTLS\Srtp`, so the media packages can be left out of the build. |
 
 To add one, edit `src/` after a build, run `git diff > patches/<name>.patch`, and keep the edit in
 place. Patches are written against the downgraded sources, so a rebuild applies them after Rector.
@@ -55,15 +70,19 @@ php tools/build.php
 ```
 
 `tools/packages.json` pins the upstream tag for every package. To pick up a new upstream release,
-bump the version there and rebuild - `src/` and `composer.json` are both regenerated.
+bump the version there and rebuild - `src/` and `composer.json` are both regenerated. A patch that
+no longer applies fails the build, so an upstream change to a patched file has to be resolved
+rather than silently dropped.
 
 ## Extensions
 
-`ext-ffi` is inherited from the media codec packages (`av`, `codecs`, `opus`, `vpx`), which sit in
-the dependency chain even when only data channels are used. `ext-gmp` comes from the crypto paths.
+`ext-ffi` is required by `ssl`, which drives the DTLS handshake through OpenSSL, so it cannot be
+dropped - leaving the media packages out only removed the other FFI consumers. `ext-gmp` comes from
+the crypto paths.
 
 ## Licensing
 
-This is a derivative distribution. The upstream packages are BSD-3-Clause, except `quasarstream/av`
-which is MIT. Every upstream licence file is reproduced under `licenses/`, one directory per
-package. Copyright remains with Amin Yazdanpanah and the PHP-WebRTC contributors.
+This is a derivative distribution. Every upstream package built here is BSD-3-Clause - the MIT
+licensed `quasarstream/av` is no longer shipped. Each licence file is reproduced under `licenses/`,
+one directory per package. Copyright remains with Amin Yazdanpanah and the PHP-WebRTC
+contributors.
