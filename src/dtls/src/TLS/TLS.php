@@ -16,10 +16,8 @@ use React\Promise\PromiseInterface;
 use Webrtc\DTLS\Enum\SSLHandshakeState;
 use Webrtc\DTLS\Exception\TLSException;
 use Webrtc\DTLS\RTCCertificate;
-use Webrtc\DTLS\Srtp;
 use Webrtc\ICE\RTCIceTransportInterface;
 use Webrtc\SDP\DtlsParameter\RTCDtlsFingerprint;
-use Webrtc\Srtp\Exception\SrtpException;
 use Webrtc\SSL\Crypto\PrivateKeyInterface;
 use Webrtc\SSL\Crypto\X509;
 use Webrtc\SSL\Enum\BioMethod;
@@ -76,6 +74,18 @@ class TLS
         "ECDHE-RSA-AES256-GCM-SHA384"
     ];
 
+    /**
+     * @var array Protection profiles advertised in the DTLS use_srtp extension.
+     *
+     * This build carries no SRTP implementation, but the extension is still offered so the
+     * handshake stays byte compatible with peers that expect it.
+     */
+    private const SRTP_PROTECTION_PROFILES = [
+        "SRTP_AEAD_AES_256_GCM",
+        "SRTP_AEAD_AES_128_GCM",
+        "SRTP_AES128_CM_SHA1_80"
+    ];
+
     /** @var SSLInterface The SSL connection instance */
     private SSLInterface $ssl;
 
@@ -99,7 +109,6 @@ class TLS
      *
      * @param RTCCertificate $certificate The certificate to use for this TLS connection
      * @throws OpenSSLException If OpenSSL initialization fails
-     * @throws SrtpException If SRTP profile setup fails
      */
     public function __construct(private readonly RTCCertificate $certificate)
     {
@@ -172,7 +181,7 @@ class TLS
      *
      * @param RTCCertificate $certificate The certificate to use
      * @return static A new TLS instance
-     * @throws OpenSSLException|SrtpException If initialization fails
+     * @throws OpenSSLException If initialization fails
      */
     public static function create(RTCCertificate $certificate): static
     {
@@ -232,14 +241,13 @@ class TLS
      * Creates the SSL context for the connection.
      *
      * @return Context The created SSL context
-     * @throws SrtpException If SRTP profile setup fails
      */
     private function createContext(): Context
     {
         $ctx = new Context(ContextMethod::DTLS_METHOD);
         $ctx->setVerify(Verify::PEER->value | Verify::FAIL_IF_NO_PEER_CERT->value, fn(...$args) => true);
         $ctx->setCipherList(implode(":", self::SUPPORTED_CIPHER_SUITES));
-        $ctx->setTlsextUseSrtp(implode(":", array_map(fn($profile) => $profile["sslProfile"], Srtp::getProfiles())));
+        $ctx->setTlsextUseSrtp(implode(":", self::SRTP_PROTECTION_PROFILES));
         $this->setCertAndPrivateKey($ctx);
         $this->setLoggerInfo($ctx);
 

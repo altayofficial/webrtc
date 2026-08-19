@@ -23,28 +23,11 @@ use Webrtc\DTLS\TLS\TLS;
 use Webrtc\ICE\Enum\IceRole;
 use Webrtc\ICE\RTCIceTransportInterface;
 use Webrtc\Mixin\EventForwarder;
-use Webrtc\NTP\NetworkTimeProtocol;
-use Webrtc\RTCP\Exception\RtcpExceptionInterface;
-use Webrtc\RTCP\RtcpPacket;
-use Webrtc\RTP\Exception\RtpExceptionInterface;
-use Webrtc\RTP\HeaderExtension\HeaderExtensionsMap;
-use Webrtc\RTP\Receiver\RtpReceiverInterface;
-use Webrtc\RTP\RTCRTPDtlsTransportInterface;
-use Webrtc\RTP\RtpPacket;
-use Webrtc\RTP\RtpRouter;
-use Webrtc\RTP\RtpUtility;
-use Webrtc\RTP\Sender\RtpSenderInterface;
-use Webrtc\RTPParameter\RTCRtpReceiveParameters;
-use Webrtc\RTPParameter\RTCRtpSendParameters;
 use Webrtc\SCTP\RTCSctpDtlsTransportInterface;
 use Webrtc\SCTP\RTCSctpTransport;
 use Webrtc\SDP\DtlsParameter\RTCDtlsFingerprint;
 use Webrtc\SDP\DtlsParameter\RTCDtlsParameters;
 use Webrtc\SDP\Enum\DtlsRole;
-use Webrtc\Srtp\Exception\SrtpException;
-use Webrtc\Srtp\Exception\SrtpExceptionInterface;
-use Webrtc\Srtp\Exception\SrtpValidateException;
-use Webrtc\Srtp\Session;
 use Webrtc\SSL\Exception\OpenSSLException;
 use Webrtc\SSL\Exception\SSLException;
 use Webrtc\SSL\Exception\SysCallException;
@@ -62,19 +45,17 @@ use function React\Async\await;
  * Class RTCDtlsTransport
  *
  * Represents the DTLS transport layer for WebRTC communications.
- * This class manages the secure transport of media and data channels over WebRTC,
- * handling encryption/decryption, SRTP protection, and packet routing.
+ * This build is data channel only - the SRTP media protection of the upstream package has been
+ * stripped out.
  *
  * Key responsibilities:
  * - Establishing and maintaining DTLS connections
- * - Managing SRTP sessions for media encryption
- * - Routing RTP/RTCP packets to appropriate receivers/senders
  * - Handling SCTP data channel traffic
  * - Providing transport statistics
  *
  * @package Webrtc\DTLS
  */
-class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterface, RTCSctpDtlsTransportInterface
+class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInterface
 {
     use EventForwarder;
 
@@ -87,20 +68,8 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
     /** @var RTCTransportStats Transport statistics collector */
     private RTCTransportStats $reportTransport;
 
-    /** @var RtpRouter Routes RTP/RTCP packets to appropriate handlers */
-    private RtpRouter $rtpRouter;
-
-    /** @var HeaderExtensionsMap Manages RTP header extensions */
-    private HeaderExtensionsMap $headerExtensionsMap;
-
     /** @var RTCSctpTransportInterface|null SCTP transport for data channels */
     private ?RTCSctpTransportInterface $sctpReceiver = null;
-
-    /** @var Session Inbound SRTP session for decrypting incoming media */
-    private Session $inboundSrtp;
-
-    /** @var Session Outbound SRTP session for encrypting outgoing media */
-    private Session $outboundSrtp;
 
     /** @var TLS The underlying TLS/DTLS implementation */
     private TLS $tls;
@@ -113,14 +82,12 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
      *
      * @param RTCIceTransportInterface $transport The underlying ICE transport
      * @param RTCCertificate $certificate The certificate to use for DTLS
-     * @throws OpenSSLException|SrtpException If initialization fails
+     * @throws OpenSSLException If initialization fails
      */
     public function __construct(private readonly RTCIceTransportInterface $transport, private readonly RTCCertificate $certificate)
     {
         $this->tls = TLS::create($this->certificate);
         $this->reportTransport = new RTCTransportStats("transport_" . spl_object_id($this));
-        $this->rtpRouter = new RtpRouter();
-        $this->headerExtensionsMap = new HeaderExtensionsMap();
         $this->forwardEvents2Methods($transport, ['close' => 'handleDisconnectingError', 'error' => 'handleDisconnectingError']);
     }
 
@@ -146,38 +113,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
     }
 
     /**
-     * Encrypts and sends RTP media data.
-     *
-     * @param string $data The RTP packet to send
-     * @throws SrtpException|DTLSException If encryption fails or connection isn't established
-     */
-    public function sendRtp(string $data): void
-    {
-        if ($this->state !== TLSState::CONNECTED) {
-            throw new DTLSException("Unable to send encrypted RTP: No connection established.");
-        }
-
-        $encryptedRtp = $this->inboundSrtp->protect($data);
-        $this->send($encryptedRtp);
-    }
-
-    /**
-     * Encrypts and sends RTCP control data.
-     *
-     * @param string $data The RTCP packet to send
-     * @throws DTLSException|SrtpException If encryption fails or connection isn't established
-     */
-    public function sendRtcp(string $data): void
-    {
-        if ($this->state !== TLSState::CONNECTED) {
-            throw new DTLSException("Unable to send encrypted RTCP: No connection established.");
-        }
-
-        $encryptedRtcp = $this->inboundSrtp->protectRtcp($data);
-        $this->send($encryptedRtcp);
-    }
-
-    /**
      * Gets the underlying TLS implementation.
      *
      * @return TLS The TLS instance
@@ -185,26 +120,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
     public function getTls(): TLS
     {
         return $this->tls;
-    }
-
-    /**
-     * Sets the inbound SRTP session.
-     *
-     * @param Session $inboundSrtp The SRTP session for decrypting incoming media
-     */
-    public function setInboundSrtp(Session $inboundSrtp): void
-    {
-        $this->inboundSrtp = $inboundSrtp;
-    }
-
-    /**
-     * Sets the outbound SRTP session.
-     *
-     * @param Session $outboundSrtp The SRTP session for encrypting outgoing media
-     */
-    public function setOutboundSrtp(Session $outboundSrtp): void
-    {
-        $this->outboundSrtp = $outboundSrtp;
     }
 
     /**
@@ -293,8 +208,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
         $firstByte = ord($data[0]);
         if ($firstByte > 19 && $firstByte < 64) {
             $this->handleSctpData($data);
-        } elseif ($firstByte > 127 && $firstByte < 192) {
-            $this->handleSrtpData($data);
         }
     }
 
@@ -321,14 +234,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
         // Check peer certificate fingerprint
         if (!$this->tls->validatePeerCertificate($certificates)) {
             $this->setFailedState("DTLS: Fingerprint mismatch!");
-            return;
-        }
-
-        // Setup inbound and outbound srtp
-        try {
-            $this->setupSrtp();
-        } catch (SrtpExceptionInterface $e) {
-            $this->setFailedState("DTLS: Failed setup srtp. " . $e->getMessage());
             return;
         }
 
@@ -434,28 +339,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
     }
 
     /**
-     * Sets up SRTP sessions for media encryption.
-     *
-     * @throws TLSException If TLS is not in the correct state
-     * @throws SrtpException If SRTP setup fails
-     * @throws DTLSException If connection isn't established
-     * @throws OpenSSLException If OpenSSL operations fail
-     * @throws SrtpValidateException If SRTP validation fails
-     */
-    public function setupSrtp(): void
-    {
-        $srtp = new Srtp();
-
-        $selectedProfile = $srtp->getProfile($this->tls->getSelectedSrtpProfile());
-        $srtpKeyMaterial = $this->tls->exportKeyingMaterial($selectedProfile["keyLength"], $selectedProfile["saltLent"]);
-
-        $isServer = $this->transport->getRole() === IceRole::Controlling;
-
-        $this->inboundSrtp = $srtp->getInbound($srtpKeyMaterial, intval($isServer));
-        $this->outboundSrtp = $srtp->getOutbound($srtpKeyMaterial, intval(!$isServer));
-    }
-
-    /**
      * Sets the transport state and emits statechange event if changed.
      *
      * @param TLSState $state The new state
@@ -477,7 +360,7 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
      */
     private function setFailedState(string $reason, ?Throwable $e = null): void
     {
-        $this->logger?->error("DTLS: Failed handshaking or srtp setup.", ["reason" => $reason]);
+        $this->logger?->error("DTLS: Failed handshaking.", ["reason" => $reason]);
         $this->setState(TLSState::FAILED);
     }
 
@@ -521,72 +404,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
     }
 
     /**
-     * Handles incoming SRTP media packets.
-     *
-     * @param string $data The received SRTP data
-     * @throws DTLSException If RTP processing fails
-     */
-    private function handleSrtpData(string $data): void
-    {
-        $arrivalTimeMs = NetworkTimeProtocol::currentMs();
-        try {
-            if (RtpUtility::isRtcp($data)) {
-                $decryptedRtcp = $this->outboundSrtp->unprotectRtcp($data);
-                $this->handleRtcpData($decryptedRtcp);
-            } else {
-                $decryptedRtp = $this->outboundSrtp->unprotect($data);
-                $this->handleRtpData($decryptedRtp, $arrivalTimeMs);
-            }
-        } catch (SrtpExceptionInterface $e) {
-            $this->logger?->debug(sprintf("DTLS: SRTP decryption failed: %s", $e->getMessage()));
-        }
-    }
-
-    /**
-     * Handles incoming RTCP control packets.
-     *
-     * @param string $data The RTCP packet data
-     * @throws DTLSException If connection isn't established
-     * @throws SrtpException If decryption fails
-     */
-    public function handleRtcpData(string $data): void
-    {
-        try {
-            $packets = RtcpPacket::decode($data);
-        } catch (RtcpExceptionInterface $e) {
-            $this->logger?->debug(sprintf("DTLS: RTCP parsing failed: %s", $e->getMessage()));
-            return;
-        }
-
-        foreach ($packets as $packet) {
-            // Route RTCP packet
-            foreach ($this->rtpRouter->routeRtcp($packet) as $recipient) {
-                $recipient->handleRtcpPacket($packet);
-            }
-        }
-    }
-
-    /**
-     * Handles incoming RTP media packets.
-     *
-     * @param string $data The RTP packet data
-     * @param int $arrivalTimeMs The packet arrival time in milliseconds
-     */
-    public function handleRtpData(string $data, int $arrivalTimeMs): void
-    {
-        try {
-            $packet = RtpPacket::decode($data, $this->headerExtensionsMap);
-        } catch (RtpExceptionInterface $e) {
-            $this->logger?->debug(sprintf("DTLS: RTP parsing failed: %s", $e->getMessage()));
-            return;
-        }
-
-        // Route RTP packet
-        $receiver = $this->rtpRouter->routeRtp($packet);
-        $receiver?->handleRtpPacket($packet, $arrivalTimeMs);
-    }
-
-    /**
      * Gets the current transport statistics.
      *
      * @return RTCStatsReport The statistics report
@@ -599,60 +416,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCRTPDtlsTransportInterf
         $report->add($this->reportTransport);
 
         return $report;
-    }
-
-    /**
-     * Registers an RTP receiver with the transport.
-     *
-     * @param RtpReceiverInterface $receiver The RTP receiver to register
-     * @param RTCRtpReceiveParameters $parameters The receiver parameters
-     */
-    public function setRtpReceiver(RtpReceiverInterface $receiver, RTCRtpReceiveParameters $parameters): void
-    {
-        $ssrcs = [];
-        foreach ($parameters->encodings as $encoding) {
-            $ssrcs[] = $encoding->ssrc;
-        }
-
-        $this->headerExtensionsMap->configure($parameters);
-        $this->rtpRouter->setReceiver(
-            $receiver,
-            $ssrcs,
-            array_map(fn($codec) => $codec->payloadType, $parameters->codecs),
-            $parameters->muxId
-        );
-    }
-
-    /**
-     * Removes an RTP receiver from the transport.
-     *
-     * @param RtpReceiverInterface $receiver The receiver to remove
-     */
-    public function removeRtpReceiver(RtpReceiverInterface $receiver): void
-    {
-        $this->rtpRouter->removeReceiver($receiver);
-    }
-
-    /**
-     * Registers an RTP sender with the transport.
-     *
-     * @param RtpSenderInterface $sender The RTP sender to register
-     * @param RTCRtpSendParameters $parameters The sender parameters
-     */
-    public function setRtpSender(RtpSenderInterface $sender, RTCRtpSendParameters $parameters): void
-    {
-        $this->headerExtensionsMap->configure($parameters);
-        $this->rtpRouter->setSender($sender, $sender->getSsrc());
-    }
-
-    /**
-     * Removes an RTP sender from the transport.
-     *
-     * @param RtpSenderInterface $sender The sender to remove
-     */
-    public function removeRtpSender(RtpSenderInterface $sender): void
-    {
-        $this->rtpRouter->removeSender($sender);
     }
 
     /**
