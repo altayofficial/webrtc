@@ -127,7 +127,7 @@ ksort($flatRequires);
 
 file_put_contents(ROOT . "/composer.json", json_encode([
 	"name" => "altayofficial/webrtc",
-	"description" => "PHP-WebRTC downgraded to run on PHP 8.1 and later. Generated - see tools/build.php.",
+	"description" => "A WebRTC library designed special for Altay family",
 	"type" => "library",
 	"license" => array_keys($licenseNames),
 	"require" => $flatRequires,
