@@ -100,6 +100,49 @@ foreach($patches as $patch){
 	run(sprintf("cd %s && git apply %s", escapeshellarg(ROOT), escapeshellarg($patch)));
 }
 
+//A patch that eats a docblock terminator leaves the declaration below it inside the comment.
+//That still lints clean and still loads - the method is simply gone - so the number of named
+//functions the tokenizer sees is compared against the number written in the file. Closures are
+//excluded on both sides, otherwise they mask the difference.
+$swallowed = [];
+foreach(iterateSources(ROOT . "/src") as $file){
+	$source = file_get_contents($file);
+
+	$parsed = 0;
+	$tokens = token_get_all($source);
+	foreach($tokens as $i => $token){
+		if(!is_array($token) || $token[0] !== T_FUNCTION){
+			continue;
+		}
+		//"use function foo;" is an import, not a declaration
+		if(previousMeaningful($tokens, $i)[0] === T_USE){
+			continue;
+		}
+		for($j = $i + 1; $j < count($tokens); $j++){
+			if(is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE){
+				continue;
+			}
+			//anything that is not "(" or "&" is a method name - PHP allows reserved words
+			//there, so matching on T_STRING alone would miss function new() and friends
+			if($tokens[$j] !== "(" && $tokens[$j] !== "&"){
+				$parsed++;
+			}
+			break;
+		}
+	}
+
+	//kept to a single line on purpose - \s would span a newline and let a comment ending in the
+	//word "function" pair up with a call on the line below
+	$written = preg_match_all('/(?<![\\$>\\w])function[ \\t]+&?[A-Za-z_][A-Za-z0-9_]*[ \\t]*\\(/', $source);
+	if($written > $parsed){
+		$swallowed[] = ltrim(substr($file, strlen(ROOT)), "/") . " ($written written, $parsed parsed)";
+	}
+}
+if($swallowed !== []){
+	fwrite(STDERR, "declarations swallowed by a comment:\n  " . implode("\n  ", $swallowed) . "\n");
+	exit(1);
+}
+
 //MoveTraitConstantsRector emits a companion class beside the trait it came from, which PSR-4
 //cannot find because the file is named after the trait. Classmap just those files.
 $classmap = [];

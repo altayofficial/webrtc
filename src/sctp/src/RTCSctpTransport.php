@@ -249,6 +249,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      * Start the SCTP association with the given remote port.
      *
      * @param int $remotePort Remote SCTP port to connect to.
+     */
     public function start(int $remotePort): void
     {
         if (!$this->started) {
@@ -270,6 +271,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      *
      *
      * @return void
+     */
     public function stop(): void
     {
         $this->transport->removeSctpReceiver($this);

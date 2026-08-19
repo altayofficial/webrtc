@@ -1456,7 +1456,7 @@ index aa16485..0000000
 -}
 \ No newline at end of file
 diff --git a/src/sctp/src/RTCSctpTransport.php b/src/sctp/src/RTCSctpTransport.php
-index c897c7a..b1c39b9 100644
+index c897c7a..4c83972 100644
 --- a/src/sctp/src/RTCSctpTransport.php
 +++ b/src/sctp/src/RTCSctpTransport.php
 @@ -44,13 +44,6 @@ use Webrtc\SCTP\Param\StreamResetOutgoingParam;
@@ -1473,7 +1473,7 @@ index c897c7a..b1c39b9 100644
  use Webrtc\Stats\enum\TLSState;
  use function React\Async\async;
  
-@@ -256,14 +249,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -256,13 +249,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Start the SCTP association with the given remote port.
       *
       * @param int $remotePort Remote SCTP port to connect to.
@@ -1484,11 +1484,10 @@ index c897c7a..b1c39b9 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      public function start(int $remotePort): void
      {
-         if (!$this->started) {
-@@ -285,14 +270,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -285,13 +271,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       *
       * @return void
@@ -1499,11 +1498,10 @@ index c897c7a..b1c39b9 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      public function stop(): void
      {
-         $this->transport->removeSctpReceiver($this);
-@@ -309,14 +286,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -309,14 +288,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       *
       * @return void
@@ -1518,7 +1516,7 @@ index c897c7a..b1c39b9 100644
       */
      private function init(): void
      {
-@@ -339,7 +308,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -339,7 +310,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Send a chunk asynchronously over the DTLS transport.
       *
       * @param Chunk $chunk The SCTP chunk to send.
@@ -1527,7 +1525,7 @@ index c897c7a..b1c39b9 100644
       */
      public function sendChunk(Chunk $chunk): void
      {
-@@ -934,14 +903,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -934,14 +905,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Handle data received from the network.
       *
       * @param string $data The received data.
@@ -1542,7 +1540,7 @@ index c897c7a..b1c39b9 100644
       */
      public function onReceived(string $data): void
      {
-@@ -1173,14 +1134,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1173,14 +1136,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Handle a SACK chunk.
       *
       * @param SackChunk $chunk The SACK chunk.
@@ -1557,7 +1555,7 @@ index c897c7a..b1c39b9 100644
       */
      function receiveSackChunk(SackChunk $chunk): void
      {
-@@ -1352,14 +1305,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1352,14 +1307,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param HeartbeatChunk $chunk The received HEARTBEAT chunk.
       * @return void
@@ -1572,7 +1570,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveHeartbeatChunk(HeartbeatChunk $chunk): void
      {
-@@ -1373,14 +1318,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1373,14 +1320,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param AbortChunk $chunk The received ABORT chunk.
       * @return void
@@ -1587,7 +1585,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveAbortChunk(AbortChunk $chunk): void
      {
-@@ -1395,14 +1332,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1395,14 +1334,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param ShutdownChunk $chunk The received SHUTDOWN chunk.
       * @return void
@@ -1602,7 +1600,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveShutdownChunk(ShutdownChunk $chunk): void
      {
-@@ -1421,14 +1350,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1421,14 +1352,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param ShutdownCompleteChunk $chunk The received SHUTDOWN_COMPLETE chunk.
       * @return void
@@ -1617,7 +1615,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveShutdownCompleteChunk(ShutdownCompleteChunk $chunk): void
      {
-@@ -1446,14 +1367,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1446,14 +1369,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param ReconfigChunk $chunk The received RECONFIG chunk.
       * @return void
@@ -1632,7 +1630,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveReconfigChunk(ReconfigChunk $chunk): void
      {
-@@ -1476,14 +1389,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1476,14 +1391,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param InitChunk $chunk The received INIT chunk.
       * @return void
@@ -1647,7 +1645,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveInitChunk(InitChunk $chunk): void
      {
-@@ -1534,14 +1439,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1534,14 +1441,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param CookieEchoChunk $chunk The received COOKIE_ECHO chunk.
       * @return void
@@ -1662,7 +1660,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveCookieEchoChunk(CookieEchoChunk $chunk): void
      {
-@@ -1582,14 +1479,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1582,14 +1481,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param InitAckChunk $chunk The received INIT_ACK chunk.
       * @return void
@@ -1677,7 +1675,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveInitAckChunk(InitAckChunk $chunk): void
      {
-@@ -1640,14 +1529,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1640,14 +1531,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param CookieAckChunk $chunk The received COOKIE_ACK chunk.
       * @return void
@@ -1692,7 +1690,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveCookieAckChunk(CookieAckChunk $chunk): void
      {
-@@ -1665,14 +1546,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1665,14 +1548,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       *
       * @param ErrorChunk $chunk The received ERROR chunk.
       * @return void
@@ -1707,7 +1705,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveErrorChunk(ErrorChunk $chunk): void
      {
-@@ -1689,14 +1562,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1689,14 +1564,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Handle a RE-CONFIG parameter.
       *
       * @param StreamParamInterface $param The RE-CONFIG parameter.
@@ -1722,7 +1720,7 @@ index c897c7a..b1c39b9 100644
       */
      public function receiveReconfigParam(StreamParamInterface $param): void
      {
-@@ -1756,14 +1621,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1756,14 +1623,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Send a RE-CONFIG parameter.
       *
       * @param StreamParamInterface $param The RE-CONFIG parameter.
@@ -1737,7 +1735,7 @@ index c897c7a..b1c39b9 100644
       */
      public function sendReconfigParam(StreamParamInterface $param): void
      {
-@@ -1787,14 +1644,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1787,14 +1646,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Build and send a selective acknowledgement (SACK) chunk.
       *
       * @return void
@@ -1752,7 +1750,7 @@ index c897c7a..b1c39b9 100644
       */
      public function sendSack(): void
      {
-@@ -1826,14 +1675,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1826,14 +1677,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
       * Transition the SCTP association to a new state.
       *
       * @param State $state The new state.
@@ -1767,7 +1765,7 @@ index c897c7a..b1c39b9 100644
       */
      public function setState(State $state): void
      {
-@@ -1867,14 +1708,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+@@ -1867,14 +1710,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
  
      /**
       * @return void
@@ -1783,7 +1781,7 @@ index c897c7a..b1c39b9 100644
      public function onErrorOrClosed(): void
      {
 diff --git a/src/sctp/src/Trait/DataChannel.php b/src/sctp/src/Trait/DataChannel.php
-index 9ed2cc9..24db4aa 100644
+index 9ed2cc9..7283ac3 100644
 --- a/src/sctp/src/Trait/DataChannel.php
 +++ b/src/sctp/src/Trait/DataChannel.php
 @@ -26,13 +26,6 @@ use Webrtc\SCTP\Enum\State;
@@ -1800,7 +1798,7 @@ index 9ed2cc9..24db4aa 100644
  
  /**
   * Trait DataChannel
-@@ -141,14 +134,6 @@ trait DataChannel
+@@ -141,13 +134,6 @@ trait DataChannel
       * Ensures the data channel task is started if it's not already running.
       *
       * @return void
@@ -1811,11 +1809,10 @@ index 9ed2cc9..24db4aa 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      private function processForwardTsn(): void
      {
-         if ($this->forwardTsnChunk !== null) {
-@@ -180,14 +165,6 @@ trait DataChannel
+@@ -180,13 +166,6 @@ trait DataChannel
       * from the outbound queue. It ensures that the flight size doesn’t exceed the congestion window (cwnd).
       *
       * @param int $cwnd The current congestion window size.
@@ -1826,11 +1823,10 @@ index 9ed2cc9..24db4aa 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      private function retransmitAndTransmit(int $cwnd): void
      {
-         $retransmitEarliest = true;
-@@ -263,14 +240,6 @@ trait DataChannel
+@@ -263,13 +242,6 @@ trait DataChannel
       * - Handles retransmission of chunks and transmits chunks from the outbound queue.
       *
       * @return void
@@ -1841,11 +1837,10 @@ index 9ed2cc9..24db4aa 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      public function transmit(): void
      {
-         $this->processForwardTsn();
-@@ -344,14 +313,6 @@ trait DataChannel
+@@ -344,13 +316,6 @@ trait DataChannel
       * @param int|null $maxRetransmits
       * @param bool|null $ordered
       * @return void
@@ -1856,11 +1851,10 @@ index 9ed2cc9..24db4aa 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      public function sendDataStream(
          int    $streamId,
-         int    $ppId,
-@@ -459,14 +420,6 @@ trait DataChannel
+@@ -459,13 +424,6 @@ trait DataChannel
       * Attempts to flush buffered data to the SCTP layer, waiting for the association to be established.
       *
       * @return void
@@ -1871,11 +1865,10 @@ index 9ed2cc9..24db4aa 100644
 -     * @throws WantWriteException
 -     * @throws WantX509LookupException
 -     * @throws ZeroReturnException
--     */
+      */
      public function dataChannelFlush(): void
      {
-         if ($this->state != State::ESTABLISHED) {
-@@ -654,14 +607,6 @@ trait DataChannel
+@@ -654,14 +612,6 @@ trait DataChannel
       * @param RTCDataChannel $channel The channel to send data over.
       * @param string $data The data to send.
       * @param bool $binary Send as a binary message instead of guessing the type from the payload.
@@ -1891,7 +1884,7 @@ index 9ed2cc9..24db4aa 100644
      public function dataChannelSend(RTCDataChannel $channel, string $data, bool $binary = false): void
      {
 diff --git a/src/webrtc/src/RTCPeerConnection.php b/src/webrtc/src/RTCPeerConnection.php
-index 9a8e872..08f645b 100644
+index 9a8e872..82bb85c 100644
 --- a/src/webrtc/src/RTCPeerConnection.php
 +++ b/src/webrtc/src/RTCPeerConnection.php
 @@ -42,13 +42,6 @@ use Webrtc\SDP\GroupDescription;
@@ -1932,25 +1925,23 @@ index 9a8e872..08f645b 100644
       */
      public function close(): void
      {
-@@ -454,8 +439,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -454,7 +439,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
       *
       * @param MediaDescription $mediaDescription The description to augment
       * @param RTCDtlsTransport $dtlsTransport The transport to describe
 -     * @throws OpenSSLException
--     */
+      */
      private function addTransportDescription(MediaDescription $mediaDescription, RTCDtlsTransport $dtlsTransport): void
      {
-         // ice
-@@ -486,8 +469,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -486,7 +470,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
       *
       * @param string|null $mid The media identifier
       * @return MediaDescription The created media description
 -     * @throws OpenSSLException
--     */
+      */
      private function createMediaDescriptionForSctp(?string $mid = null): MediaDescription
      {
-         if ($this->sctpLegacySdp) {
-@@ -511,8 +492,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -511,8 +494,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
       *
       * @param RTCDataChannelParameters $parameters Configuration for the data channel
       * @return RTCDataChannel The created data channel
@@ -1959,7 +1950,7 @@ index 9a8e872..08f645b 100644
       * @throws SctpException
       */
      public function createDataChannel(RTCDataChannelParameters $parameters): RTCDataChannel
-@@ -531,8 +510,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -531,8 +512,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      /**
       * Creates an SCTP transport if none exists.
       *
@@ -1968,7 +1959,7 @@ index 9a8e872..08f645b 100644
       * @throws SctpException If SCTP transport creation fails
       */
      private function createSctpTransport(): void
-@@ -548,7 +525,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -548,7 +527,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
       * Creates a DTLS transport.
       *
       * @return RTCDtlsTransport The created DTLS transport
@@ -1976,7 +1967,7 @@ index 9a8e872..08f645b 100644
       * @throws RandomException If random number generation fails
       */
      private function createDtlsTransport(): RTCDtlsTransport
-@@ -798,8 +774,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -798,8 +776,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
       * @param int $index The media line index in the SDP
       * @param MediaDescription $media The media description from the remote SDP
       * @return RTCDtlsTransport The DTLS transport for the SCTP association
@@ -1985,7 +1976,7 @@ index 9a8e872..08f645b 100644
       * @throws SctpException
       */
      private function getSctpDtlsTransport(int $index, MediaDescription $media): RTCDtlsTransport
-@@ -913,7 +887,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+@@ -913,7 +889,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
       * @throws RandomException If random number generation fails
       * @throws TLSException If TLS handshake fails
       * @throws DTLSException If DTLS handshake fails

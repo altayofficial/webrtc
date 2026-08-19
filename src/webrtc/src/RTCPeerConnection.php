@@ -439,6 +439,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      *
      * @param MediaDescription $mediaDescription The description to augment
      * @param RTCDtlsTransport $dtlsTransport The transport to describe
+     */
     private function addTransportDescription(MediaDescription $mediaDescription, RTCDtlsTransport $dtlsTransport): void
     {
         // ice
@@ -469,6 +470,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      *
      * @param string|null $mid The media identifier
      * @return MediaDescription The created media description
+     */
     private function createMediaDescriptionForSctp(?string $mid = null): MediaDescription
     {
         if ($this->sctpLegacySdp) {

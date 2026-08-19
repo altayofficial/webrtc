@@ -134,6 +134,7 @@ trait DataChannel
      * Ensures the data channel task is started if it's not already running.
      *
      * @return void
+     */
     private function processForwardTsn(): void
     {
         if ($this->forwardTsnChunk !== null) {
@@ -165,6 +166,7 @@ trait DataChannel
      * from the outbound queue. It ensures that the flight size doesn’t exceed the congestion window (cwnd).
      *
      * @param int $cwnd The current congestion window size.
+     */
     private function retransmitAndTransmit(int $cwnd): void
     {
         $retransmitEarliest = true;
@@ -240,6 +242,7 @@ trait DataChannel
      * - Handles retransmission of chunks and transmits chunks from the outbound queue.
      *
      * @return void
+     */
     public function transmit(): void
     {
         $this->processForwardTsn();
@@ -313,6 +316,7 @@ trait DataChannel
      * @param int|null $maxRetransmits
      * @param bool|null $ordered
      * @return void
+     */
     public function sendDataStream(
         int    $streamId,
         int    $ppId,
@@ -420,6 +424,7 @@ trait DataChannel
      * Attempts to flush buffered data to the SCTP layer, waiting for the association to be established.
      *
      * @return void
+     */
     public function dataChannelFlush(): void
     {
         if ($this->state != State::ESTABLISHED) {
