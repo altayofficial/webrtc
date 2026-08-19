@@ -1,21 +1,5 @@
 [
     {
-        "name": "quasarstream/av",
-        "repository": "https://github.com/PHP-WebRTC/av.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\AVCodec\\": "src"
-        }
-    },
-    {
-        "name": "quasarstream/codecs",
-        "repository": "https://github.com/PHP-WebRTC/codec.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\Codecs\\": "src"
-        }
-    },
-    {
         "name": "quasarstream/datachannel",
         "repository": "https://github.com/PHP-WebRTC/datachannel.git",
         "version": "v1.0.0",
@@ -72,30 +56,6 @@
         }
     },
     {
-        "name": "quasarstream/opus",
-        "repository": "https://github.com/PHP-WebRTC/opus.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\Opus\\": "src"
-        }
-    },
-    {
-        "name": "quasarstream/rtcp",
-        "repository": "https://github.com/PHP-WebRTC/rtcp.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\RTCP\\": "src"
-        }
-    },
-    {
-        "name": "quasarstream/rtp",
-        "repository": "https://github.com/PHP-WebRTC/rtp.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\RTP\\": "src"
-        }
-    },
-    {
         "name": "quasarstream/rtp-parameter",
         "repository": "https://github.com/PHP-WebRTC/rtpparameter.git",
         "version": "v1.0.0",
@@ -117,14 +77,6 @@
         "version": "v1.0.0",
         "psr4": {
             "Webrtc\\SDP\\": "src"
-        }
-    },
-    {
-        "name": "quasarstream/srtp",
-        "repository": "https://github.com/PHP-WebRTC/srtp.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\Srtp\\": "src"
         }
     },
     {
@@ -157,14 +109,6 @@
         "version": "v1.0.0",
         "psr4": {
             "Webrtc\\TURN\\": "src"
-        }
-    },
-    {
-        "name": "quasarstream/vpx",
-        "repository": "https://github.com/PHP-WebRTC/vpx.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\VPX\\": "src"
         }
     },
     {
