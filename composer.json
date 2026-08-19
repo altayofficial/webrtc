@@ -1,6 +1,6 @@
 {
     "name": "altayofficial/webrtc",
-    "description": "PHP-WebRTC downgraded to run on PHP 8.1 and later. Generated - see tools/build.php.",
+    "description": "A WebRTC library designed special for Altay family",
     "type": "library",
     "license": [
         "BSD-3-Clause"
