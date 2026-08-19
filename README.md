@@ -15,8 +15,10 @@ upstream needs no changes.
 composer require altayofficial/webrtc
 ```
 
-The package declares `replace` for all 22 upstream packages - including the media ones it does not
-ship - so Composer will not install them alongside it and the namespaces cannot collide.
+The package declares `replace` for each of the 15 upstream packages it ships, so Composer will not
+install them alongside it and the namespaces cannot collide. The media packages are not replaced -
+this package does not provide them, so claiming otherwise would leave anything that genuinely needs
+`Webrtc\RTP\` and friends with no source for them.
 
 ## Data channels only
 
