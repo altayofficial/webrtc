@@ -6,8 +6,8 @@
         "BSD-3-Clause"
     ],
     "require": {
+        "altayofficial/dtls": "^1.0",
         "evenement/evenement": "^3.0",
-        "ext-ffi": "*",
         "ext-gmp": "*",
         "php": "^8.1",
         "psr/log": "^3.0",
@@ -31,12 +31,17 @@
         "quasarstream/rtp-parameter": "v1.0.0",
         "quasarstream/sctp": "v1.0.0",
         "quasarstream/sdp": "v1.0.0",
-        "quasarstream/ssl": "v1.0.0",
         "quasarstream/stats": "v1.0.0",
         "quasarstream/stun": "v1.0.1",
         "quasarstream/turn": "v1.0.0",
         "quasarstream/webrtc": "v1.0.3"
     },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/altayofficial/dtls"
+        }
+    ],
     "autoload": {
         "psr-4": {
             "Webrtc\\DTLS\\": "src/dtls/src/",
@@ -49,7 +54,6 @@
             "Webrtc\\RTPParameter\\": "src/rtp-parameter/src/",
             "Webrtc\\SCTP\\": "src/sctp/src/",
             "Webrtc\\SDP\\": "src/sdp/src/",
-            "Webrtc\\SSL\\": "src/ssl/src/",
             "Webrtc\\STUN\\": "src/stun/src/",
             "Webrtc\\Stats\\": "src/stats/src/",
             "Webrtc\\TURN\\": "src/turn/src/",

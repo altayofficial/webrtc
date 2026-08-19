@@ -42,13 +42,6 @@ use Webrtc\SDP\GroupDescription;
 use Webrtc\SDP\MediaDescription;
 use Webrtc\SDP\RTCSessionDescription;
 use Webrtc\SDP\SessionDescription;
-use Webrtc\SSL\Exception\OpenSSLException;
-use Webrtc\SSL\Exception\SSLException;
-use Webrtc\SSL\Exception\SysCallException;
-use Webrtc\SSL\Exception\WantReadException;
-use Webrtc\SSL\Exception\WantWriteException;
-use Webrtc\SSL\Exception\WantX509LookupException;
-use Webrtc\SSL\Exception\ZeroReturnException;
 use Webrtc\Stats\enum\TLSState;
 use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
@@ -207,7 +200,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      *
      * @param array|RTCConfiguration|null $configuration Configuration options for the connection
      * @throws RTCCertificateException If certificate generation fails
-     * @throws OpenSSLException|DateInvalidOperationException If there's an SSL-related error
+     * @throws DateInvalidOperationException If there's an SSL-related error
      */
     public function __construct(null|array|RTCConfigurationInterface $configuration = null)
     {
@@ -377,14 +370,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Closes the peer connection and terminates all transports.
      *
-     * @throws OpenSSLException
-     * @throws TLSException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function close(): void
     {
@@ -454,8 +439,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      *
      * @param MediaDescription $mediaDescription The description to augment
      * @param RTCDtlsTransport $dtlsTransport The transport to describe
-     * @throws OpenSSLException
-     */
     private function addTransportDescription(MediaDescription $mediaDescription, RTCDtlsTransport $dtlsTransport): void
     {
         // ice
@@ -486,8 +469,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      *
      * @param string|null $mid The media identifier
      * @return MediaDescription The created media description
-     * @throws OpenSSLException
-     */
     private function createMediaDescriptionForSctp(?string $mid = null): MediaDescription
     {
         if ($this->sctpLegacySdp) {
@@ -511,8 +492,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      *
      * @param RTCDataChannelParameters $parameters Configuration for the data channel
      * @return RTCDataChannel The created data channel
-     * @throws OpenSSLException
-     * @throws RandomException
      * @throws SctpException
      */
     public function createDataChannel(RTCDataChannelParameters $parameters): RTCDataChannel
@@ -531,8 +510,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Creates an SCTP transport if none exists.
      *
-     * @throws OpenSSLException
-     * @throws RandomException If random number generation fails
      * @throws SctpException If SCTP transport creation fails
      */
     private function createSctpTransport(): void
@@ -548,7 +525,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      * Creates a DTLS transport.
      *
      * @return RTCDtlsTransport The created DTLS transport
-     * @throws OpenSSLException If SSL operation fails
      * @throws RandomException If random number generation fails
      */
     private function createDtlsTransport(): RTCDtlsTransport
@@ -798,8 +774,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      * @param int $index The media line index in the SDP
      * @param MediaDescription $media The media description from the remote SDP
      * @return RTCDtlsTransport The DTLS transport for the SCTP association
-     * @throws OpenSSLException
-     * @throws RandomException
      * @throws SctpException
      */
     private function getSctpDtlsTransport(int $index, MediaDescription $media): RTCDtlsTransport
@@ -913,7 +887,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      * @throws RandomException If random number generation fails
      * @throws TLSException If TLS handshake fails
      * @throws DTLSException If DTLS handshake fails
-     * @throws OpenSSLException|Throwable If SSL operation fails
+     * @throws Throwable If SSL operation fails
      */
     private function connect(): void
     {

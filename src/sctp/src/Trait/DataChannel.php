@@ -26,13 +26,6 @@ use Webrtc\SCTP\Enum\State;
 use Webrtc\SCTP\Param\StreamResetOutgoingParam;
 use Webrtc\SCTP\SctpConstant;
 use Webrtc\SCTP\SctpUtility;
-use Webrtc\SSL\Exception\OpenSSLException;
-use Webrtc\SSL\Exception\SSLException;
-use Webrtc\SSL\Exception\SysCallException;
-use Webrtc\SSL\Exception\WantReadException;
-use Webrtc\SSL\Exception\WantWriteException;
-use Webrtc\SSL\Exception\WantX509LookupException;
-use Webrtc\SSL\Exception\ZeroReturnException;
 
 /**
  * Trait DataChannel
@@ -141,14 +134,6 @@ trait DataChannel
      * Ensures the data channel task is started if it's not already running.
      *
      * @return void
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
-     */
     private function processForwardTsn(): void
     {
         if ($this->forwardTsnChunk !== null) {
@@ -180,14 +165,6 @@ trait DataChannel
      * from the outbound queue. It ensures that the flight size doesn’t exceed the congestion window (cwnd).
      *
      * @param int $cwnd The current congestion window size.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
-     */
     private function retransmitAndTransmit(int $cwnd): void
     {
         $retransmitEarliest = true;
@@ -263,14 +240,6 @@ trait DataChannel
      * - Handles retransmission of chunks and transmits chunks from the outbound queue.
      *
      * @return void
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
-     */
     public function transmit(): void
     {
         $this->processForwardTsn();
@@ -344,14 +313,6 @@ trait DataChannel
      * @param int|null $maxRetransmits
      * @param bool|null $ordered
      * @return void
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
-     */
     public function sendDataStream(
         int    $streamId,
         int    $ppId,
@@ -459,14 +420,6 @@ trait DataChannel
      * Attempts to flush buffered data to the SCTP layer, waiting for the association to be established.
      *
      * @return void
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
-     */
     public function dataChannelFlush(): void
     {
         if ($this->state != State::ESTABLISHED) {
@@ -654,14 +607,6 @@ trait DataChannel
      * @param RTCDataChannel $channel The channel to send data over.
      * @param string $data The data to send.
      * @param bool $binary Send as a binary message instead of guessing the type from the payload.
-     * @throws OpenSSLException
-     * @throws SSLException
-     * @throws SysCallException
-     * @throws TLSException
-     * @throws WantReadException
-     * @throws WantWriteException
-     * @throws WantX509LookupException
-     * @throws ZeroReturnException
      */
     public function dataChannelSend(RTCDataChannel $channel, string $data, bool $binary = false): void
     {

@@ -1,0 +1,1996 @@
+diff --git a/src/dtls/src/RTCCertificate.php b/src/dtls/src/RTCCertificate.php
+index 137963a..13306ae 100644
+--- a/src/dtls/src/RTCCertificate.php
++++ b/src/dtls/src/RTCCertificate.php
+@@ -11,206 +11,73 @@
+ 
+ namespace Webrtc\DTLS;
+ 
+-use DateInterval;
+-use DateInvalidOperationException;
+-use DateTimeImmutable;
++use altay\dtls\Certificate;
++use altay\dtls\Exception\DtlsException;
+ use Webrtc\DTLS\Exception\RTCCertificateException;
+ use Webrtc\SDP\DtlsParameter\RTCDtlsFingerprint;
+-use Webrtc\SSL\Crypto\EC\EC;
+-use Webrtc\SSL\Crypto\PrivateKeyInterface;
+-use Webrtc\SSL\Crypto\X509;
+-use Webrtc\SSL\Enum\ECCurveName;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\OpenSSL;
+ 
+ /**
+- * Class RTCCertificate
++ * The local DTLS identity.
+  *
+- * Represents a certificate used by an RTCDtlsTransport for WebRTC communications.
+- * This class handles certificate generation, management, and fingerprinting for DTLS connections.
+- *
+- * The certificate can be either:
+- * - Generated automatically with EC secp256r1 private key (default behavior)
+- * - Loaded from existing certificate and private key files
+- *
+- * @package Webrtc\DTLS
++ * A self signed ECDSA P-256 certificate, either generated on the spot or loaded from disk. The
++ * only thing the peer ever checks is the SHA-256 fingerprint that travels in the SDP, so no
++ * chain is built and none is expected back.
+  */
+ class RTCCertificate
+ {
+-    /** @var string Default country for a certificate subject */
+-    private const COUNTRY = "US";
+-
+-    /** @var string Default state for a certificate subject */
+-    private const STATE = "Virginia";
+-
+-    /** @var string Default city for a certificate subject */
+-    private const CITY = "Fairfax";
+-
+-    /** @var string Default organization for certificate subject */
+-    private const ORGANIZATION = "Quasar Stream";
+-
+-    /** @var string Default common name for a certificate subject */
+-    private const ORGANIZATION_WEBSITE = "QuasarStream.com";
+-
+-    /** @var PrivateKeyInterface|string The private key (either as object or file path) */
+-    private PrivateKeyInterface|string $privateKey;
+-
+-    /** @var X509|string The certificate (either as X509 object or file path) */
+-    private X509|string $certificate;
+-
+-    /** @var X509 The X509 certificate object */
+-    private X509 $x509;
++    private Certificate $certificate;
+ 
+     /**
+-     * RTCCertificate constructor.
+-     *
+-     * Initializes the certificate either from provided files or by generating a new one.
+-     *
+-     * @param string|null $privateKey Path to an existing private key file (PEM format)
+-     * @param string|null $certificate Path to an existing certificate file (PEM format)
+-     *
+-     * @throws RTCCertificateException If provided files don't exist or are invalid
+-     * @throws OpenSSLException If OpenSSL operations fail
+-     * @throws DateInvalidOperationException
++     * @param string|null $privateKey path to a PEM private key, or null to generate one
++     * @param string|null $certificate path to a PEM certificate, or null to generate one
++     * @throws RTCCertificateException if the pair cannot be loaded or generated
+      */
+     public function __construct(?string $privateKey = null, ?string $certificate = null)
+     {
+-        OpenSSL::init();
+-
+-        if ($privateKey && $certificate) {
+-            if (!is_file($privateKey) || !is_file($certificate)) {
+-                throw new RTCCertificateException(sprintf(
+-                    "Either the private key file or the certificate file (or both) does not exist. Private key path: %s, Certificate path: %s",
+-                    $privateKey,
+-                    $certificate
+-                ));
++        try {
++            if ($privateKey !== null && $certificate !== null) {
++                $this->certificate = Certificate::fromPem(
++                    self::read($certificate),
++                    self::read($privateKey)
++                );
++            } else {
++                $this->certificate = Certificate::generate();
+             }
+-            $this->privateKey = $privateKey;
+-            $this->certificate = $certificate;
+-            $this->x509 = X509::loadFile($certificate);
+-        } else {
+-            $this->generate();
++        } catch (DtlsException $e) {
++            throw new RTCCertificateException($e->getMessage(), $e->getCode(), $e);
+         }
+     }
+ 
+     /**
+-     * Gets the certificate expiration date.
+-     *
+-     * @return DateTimeImmutable The date when the certificate expires
+-     *
+-     * @throws OpenSSLException If certificate expiration date can’t be retrieved
++     * The underlying identity, as the DTLS layer wants it.
+      */
+-    public function expires(): DateTimeImmutable
++    public function getIdentity(): Certificate
+     {
+-        return $this->x509->getExpires();
++        return $this->certificate;
+     }
+ 
+     /**
+-     * Gets the certificate fingerprints.
+-     *
+-     * Returns an array of fingerprint objects containing the certificate's SHA-256 digest.
+-     * This is used for DTLS fingerprint verification during the WebRTC handshake.
++     * The fingerprints advertised on the SDP a=fingerprint line.
+      *
+-     * @return array<RTCDtlsFingerprint> Array of fingerprint objects
+-     *
+-     * @throws OpenSSLException If fingerprint calculation fails
++     * @return RTCDtlsFingerprint[]
+      */
+     public function getFingerprints(): array
+     {
+-        return [new RTCDtlsFingerprint('sha-256', $this->x509->getDigits("sha256"))];
+-    }
+-
+-    /**
+-     * Generates a new certificate and private key pair.
+-     *
+-     * Creates:
+-     * - A new EC private key using secp256r1 curve
+-     * - A corresponding X.509 certificate with default subject information
+-     *
+-     * @return void
+-     *
+-     * @throws OpenSSLException|DateInvalidOperationException If generation fails
+-     */
+-    private function generate(): void
+-    {
+-        $this->privateKey = $this->generatePrivateKey();
+-        $this->certificate = $this->createCertificate();
+-    }
+-
+-    /**
+-     * Generates a new EC private key using secp256r1 curve.
+-     *
+-     * @return PrivateKeyInterface The generated private key
+-     *
+-     * @throws OpenSSLException If key generation fails
+-     */
+-    private function generatePrivateKey(): PrivateKeyInterface
+-    {
+-        $ecKey = new EC(ECCurveName::secp256r1);
+-        $ecKey->generate();
+-
+-        return $ecKey;
++        return [new RTCDtlsFingerprint("sha-256", $this->certificate->fingerprint())];
+     }
+ 
+-    /**
+-     * Creates a new X.509 certificate.
+-     *
+-     * The certificate will:
+-     * - Used the generated private key
+-     * - Be valid from 1 day ago to 30 days in the future
+-     * - Contain default subject information (organization, location, etc.)
+-     *
+-     * @return X509 The created certificate
+-     *
+-     * @throws OpenSSLException If certificate creation fails
+-     * @throws DateInvalidOperationException If date operations fail
+-     */
+-    private function createCertificate(): X509
++    public function getCertificate(): string
+     {
+-        $x509 = new X509();
+-
+-        $x509->setSerialNumberDefualt();
+-
+-        $now = new DateTimeImmutable();
+-        $x509->setDateNotBefore($now->sub(new DateInterval('P1D'))); // The certificate validity started from a day ago.
+-        $x509->setDateNotAfter($now->add(new DateInterval('P30D'))); // The certificate is valid until 30 days from now.
+-
+-        $x509->setPublicKey($this->privateKey);
+-
+-        $x509->setSubjectName();
+-
+-        $x509->addEntry("C", self::COUNTRY);
+-        $x509->addEntry("ST", self::STATE);
+-        $x509->addEntry("L", self::CITY);
+-        $x509->addEntry("O", self::ORGANIZATION);
+-        $x509->addEntry("CN", self::ORGANIZATION_WEBSITE);
+-
+-        $x509->setIssuerName();
+-
+-        $x509->sign($this->privateKey);
+-
+-        $this->x509 = $x509;
+-
+-        return $x509;
++        return $this->certificate->der();
+     }
+ 
+-    /**
+-     * Gets the certificate.
+-     *
+-     * @return X509|string The certificate as X509 object or file path string
+-     */
+-    public function getCertificate(): X509|string
++    private static function read(string $path): string
+     {
+-        return $this->certificate;
+-    }
++        $contents = @file_get_contents($path);
++        if ($contents === false) {
++            throw new RTCCertificateException("cannot read $path");
++        }
+ 
+-    /**
+-     * Gets the private key.
+-     *
+-     * @return PrivateKeyInterface|string The private key as object or file path string
+-     */
+-    public function getPrivateKey(): PrivateKeyInterface|string
+-    {
+-        return $this->privateKey;
++        return $contents;
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/src/dtls/src/RTCDtlsTransport.php b/src/dtls/src/RTCDtlsTransport.php
+index 0295a53..1e07906 100644
+--- a/src/dtls/src/RTCDtlsTransport.php
++++ b/src/dtls/src/RTCDtlsTransport.php
+@@ -11,15 +11,17 @@
+ 
+ namespace Webrtc\DTLS;
+ 
++use altay\dtls\Connection;
++use altay\dtls\Exception\DtlsException as NativeDtlsException;
+ use Evenement\EventEmitter;
+ use Psr\Log\LoggerInterface;
++use React\EventLoop\Loop;
++use React\EventLoop\TimerInterface;
++use React\Promise\Deferred;
+ use React\Promise\PromiseInterface;
+ use Throwable;
+ use Webrtc\DataChannel\RTCSctpTransportInterface;
+-use Webrtc\DTLS\Enum\SSLHandshakeState;
+ use Webrtc\DTLS\Exception\DTLSException;
+-use Webrtc\DTLS\Exception\TLSException;
+-use Webrtc\DTLS\TLS\TLS;
+ use Webrtc\ICE\Enum\IceRole;
+ use Webrtc\ICE\RTCIceTransportInterface;
+ use Webrtc\Mixin\EventForwarder;
+@@ -28,13 +30,6 @@ use Webrtc\SCTP\RTCSctpTransport;
+ use Webrtc\SDP\DtlsParameter\RTCDtlsFingerprint;
+ use Webrtc\SDP\DtlsParameter\RTCDtlsParameters;
+ use Webrtc\SDP\Enum\DtlsRole;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\Exception\SSLException;
+-use Webrtc\SSL\Exception\SysCallException;
+-use Webrtc\SSL\Exception\WantReadException;
+-use Webrtc\SSL\Exception\WantWriteException;
+-use Webrtc\SSL\Exception\WantX509LookupException;
+-use Webrtc\SSL\Exception\ZeroReturnException;
+ use Webrtc\Stats\enum\TLSState;
+ use Webrtc\Stats\RTCStatsReport;
+ use Webrtc\Stats\RTCTransportStats;
+@@ -44,14 +39,11 @@ use function React\Async\await;
+ /**
+  * Class RTCDtlsTransport
+  *
+- * Represents the DTLS transport layer for WebRTC communications.
+- * This build is data channel only - the SRTP media protection of the upstream package has been
+- * stripped out.
++ * The DTLS layer for data channels, carried over the ICE transport underneath.
+  *
+- * Key responsibilities:
+- * - Establishing and maintaining DTLS connections
+- * - Handling SCTP data channel traffic
+- * - Providing transport statistics
++ * The handshake itself is done by altayofficial/dtls, which is written against ext-openssl and
++ * so needs nothing loaded at runtime. Records arriving on the ICE transport are fed straight in,
++ * and decrypted application data is handed to the SCTP receiver.
+  *
+  * @package Webrtc\DTLS
+  */
+@@ -59,6 +51,16 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+ {
+     use EventForwarder;
+ 
++    /**
++     * How long to wait for the peer to complete the handshake before giving up.
++     */
++    private const HANDSHAKE_TIMEOUT = 30.0;
++
++    /**
++     * How often to check whether a flight needs retransmitting.
++     */
++    private const RETRANSMIT_INTERVAL = 0.25;
++
+     /** @var TLSState Current state of the DTLS transport */
+     private TLSState $state = TLSState::NEW;
+ 
+@@ -71,22 +73,17 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+     /** @var RTCSctpTransportInterface|null SCTP transport for data channels */
+     private ?RTCSctpTransportInterface $sctpReceiver = null;
+ 
+-    /** @var TLS The underlying TLS/DTLS implementation */
+-    private TLS $tls;
++    /** @var Connection|null The DTLS endpoint, created once the role is known */
++    private ?Connection $connection = null;
++
++    /** @var TimerInterface|null Drives handshake retransmission */
++    private ?TimerInterface $retransmitTimer = null;
+ 
+     /** @var DtlsRole The role (client/server) in the DTLS handshake */
+     private DtlsRole $role = DtlsRole::Auto;
+ 
+-    /**
+-     * RTCDtlsTransport constructor.
+-     *
+-     * @param RTCIceTransportInterface $transport The underlying ICE transport
+-     * @param RTCCertificate $certificate The certificate to use for DTLS
+-     * @throws OpenSSLException If initialization fails
+-     */
+     public function __construct(private readonly RTCIceTransportInterface $transport, private readonly RTCCertificate $certificate)
+     {
+-        $this->tls = TLS::create($this->certificate);
+         $this->reportTransport = new RTCTransportStats("transport_" . spl_object_id($this));
+         $this->forwardEvents2Methods($transport, ['close' => 'handleDisconnectingError', 'error' => 'handleDisconnectingError']);
+     }
+@@ -94,80 +91,37 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+     /**
+      * Encrypts and sends application data over the DTLS connection.
+      *
+-     * @param string $data The plaintext data to send
+-     * @throws SysCallException If a system call fails
+-     * @throws OpenSSLException If OpenSSL operations fail
+-     * @throws WantReadException If more data needs to be read
+-     * @throws WantX509LookupException If certificate lookup is needed
+-     * @throws TLSException If TLS is not in the correct state
+-     * @throws WantWriteException If more data needs to be written
+-     * @throws ZeroReturnException If the connection was closed
+-     * @throws SSLException For general SSL errors
++     * @throws DTLSException if the connection is not established
+      */
+     public function sendData(string $data): void
+     {
+-        $encryptedData = $this->tls->encrypt($data);
+-        if (strlen($encryptedData) > 0) {
+-            $this->send($encryptedData);
++        if ($this->connection === null || !$this->connection->isEstablished()) {
++            throw new DTLSException("Unable to send: no DTLS connection established.");
+         }
+-    }
+ 
+-    /**
+-     * Gets the underlying TLS implementation.
+-     *
+-     * @return TLS The TLS instance
+-     */
+-    public function getTls(): TLS
+-    {
+-        return $this->tls;
++        $this->connection->send($data);
+     }
+ 
+     /**
+      * Gets the local DTLS parameters including certificate fingerprints.
+-     *
+-     * @return RTCDtlsParameters The local DTLS parameters
+-     * @throws OpenSSLException
+      */
+     public function getLocalParameters(): RTCDtlsParameters
+     {
+         return new RTCDtlsParameters($this->certificate->getFingerprints());
+     }
+ 
+-    /**
+-     * Sets the DTLS role (client/server/auto).
+-     *
+-     * @param DtlsRole $getRole The role to set
+-     */
+     public function setRole(DtlsRole $getRole): void
+     {
+         $this->role = $getRole;
+     }
+ 
+-    /**
+-     * Gets the current DTLS role.
+-     *
+-     * @return DtlsRole The current role
+-     */
+     public function getRole(): DtlsRole
+     {
+         return $this->role;
+     }
+ 
+-    /**
+-     * Sends any pending data from the BIO buffer.
+-     */
+-    private function sendBioData(): void
+-    {
+-        $data = $this->tls->getBio()->read();
+-        if ($data && strlen($data) > 0) {
+-            $this->send($data);
+-        }
+-    }
+-
+     /**
+      * Sends raw data through the underlying transport.
+-     *
+-     * @param string $data The data to send
+      */
+     public function send(string $data): void
+     {
+@@ -175,11 +129,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+         $this->reportTransport->handleSent($data);
+     }
+ 
+-    /**
+-     * Gets the transport statistics collector.
+-     *
+-     * @return RTCTransportStats The transport statistics
+-     */
+     public function getReportTransport(): RTCTransportStats
+     {
+         return $this->reportTransport;
+@@ -187,8 +136,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+ 
+     /**
+      * Removes an SCTP receiver (placeholder implementation).
+-     *
+-     * @param RTCSctpTransport $param The SCTP transport to remove
+      */
+     public function removeSctpReceiver(RTCSctpTransport $param): void
+     {
+@@ -196,69 +143,128 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+     }
+ 
+     /**
+-     * Handles incoming data from the transport.
++     * Runs the DTLS handshake and, once it completes, checks the peer against the fingerprints
++     * that arrived over signalling.
+      *
+-     * @param string $data The received data
+-     * @throws SysCallException|DTLSException If a system call fails
+-     */
+-    private function onReceivedData(string $data): void
+-    {
+-        $this->reportTransport->handleReceived($data);
+-
+-        $firstByte = ord($data[0]);
+-        if ($firstByte > 19 && $firstByte < 64) {
+-            $this->handleSctpData($data);
+-        }
+-    }
+-
+-    /**
+-     * Starts the DTLS transport and begins the handshake process.
+-     *
+-     * @param RTCDtlsFingerprint[] $certificates Array of peer certificate fingerprints to validate
+-     * @throws DTLSException If handshake or setup fails
+-     * @throws OpenSSLException If OpenSSL operations fail
+-     * @throws TLSException If TLS is not in the correct state
++     * @param RTCDtlsFingerprint[] $certificates fingerprints from the remote description
++     * @throws DTLSException if the handshake fails or the peer is not who signalling said
+      */
+     public function start(array $certificates): void
+     {
+         $this->setState(TLSState::CONNECTING);
+ 
+-        // Start handshaking
++        $established = new Deferred();
++        $identity = $this->certificate->getIdentity();
++        $send = function (string $datagram): void {
++            $this->send($datagram);
++        };
++
++        $this->connection = $this->resolveRole() === DtlsRole::Server
++            ? Connection::server($identity, $send)
++            : Connection::client($identity, $send);
++
++        $this->connection->onApplicationData(function (string $data): void {
++            $this->sctpReceiver?->onReceived($data);
++        });
++        $this->connection->onEstablished(static function () use ($established): void {
++            $established->resolve(true);
++        });
++
++        // records arrive on the ICE transport from now on
++        $this->forwardEvents2Methods($this->transport, ['data' => 'onReceivedData']);
++
++        // a lost flight is only recovered if something keeps nudging the connection
++        $this->retransmitTimer = Loop::addPeriodicTimer(self::RETRANSMIT_INTERVAL, function (): void {
++            $this->connection?->handleTimeout();
++        });
++
+         try {
+-            await($this->tls->startHandshaking($this->transport, $this->getHandShakeState()));
++            $this->connection->start();
++            await($this->withTimeout($established->promise()));
+         } catch (Throwable $e) {
++            $this->cancelRetransmits();
+             $this->setFailedState("DTLS: " . $e->getMessage());
++
+             return;
+         }
+ 
+-        // Check peer certificate fingerprint
+-        if (!$this->tls->validatePeerCertificate($certificates)) {
++        $this->cancelRetransmits();
++
++        if (!$this->verifyPeer($certificates)) {
+             $this->setFailedState("DTLS: Fingerprint mismatch!");
++
+             return;
+         }
+ 
+-        // Register onReceivedData method
+-        $this->forwardEvents2Methods($this->transport, ['data' => 'onReceivedData']);
+-
+-        // Set success log and state
+         $this->logger?->debug("DTLS: Successful handshake");
+         $this->setState(TLSState::CONNECTED);
+     }
+ 
+     /**
+-     * Stops the DTLS transport and cleans up resources.
++     * The peer is trusted exactly when the certificate it presented matches a fingerprint from
++     * the remote description. There is no chain to walk.
++     *
++     * @param RTCDtlsFingerprint[] $certificates
++     */
++    private function verifyPeer(array $certificates): bool
++    {
++        $actual = $this->connection?->getPeerFingerprint();
++        if ($actual === null) {
++            return false;
++        }
++
++        foreach ($certificates as $fingerprint) {
++            if ($fingerprint->isAlgorithm("sha-256") && hash_equals(strtolower($actual), strtolower($fingerprint->value))) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++
++    /**
++     * Rejects the given promise if the handshake has not completed in time, so a peer that goes
++     * silent mid flight fails the transport instead of hanging it.
+      *
+-     * @return PromiseInterface A promise that resolves when shutdown is complete
++     * @param PromiseInterface<bool> $promise
++     * @return PromiseInterface<bool>
++     */
++    private function withTimeout(PromiseInterface $promise): PromiseInterface
++    {
++        $deadline = new Deferred();
++        $settled = false;
++
++        $timer = Loop::addTimer(self::HANDSHAKE_TIMEOUT, static function () use ($deadline, &$settled): void {
++            if (!$settled) {
++                $settled = true;
++                $deadline->reject(new DTLSException("handshake timed out"));
++            }
++        });
++
++        $promise->then(static function ($value) use ($deadline, $timer, &$settled): void {
++            if (!$settled) {
++                $settled = true;
++                Loop::cancelTimer($timer);
++                $deadline->resolve($value);
++            }
++        });
++
++        return $deadline->promise();
++    }
++
++    /**
++     * Stops the DTLS transport and cleans up resources.
+      */
+     public function stop(): PromiseInterface
+     {
+         return async(function () {
++            $this->cancelRetransmits();
++
+             if (in_array($this->state, [TLSState::CONNECTING, TLSState::CONNECTED])) {
+                 try {
+-                    $this->tls->shutdown(); // Attempt to shut down, regardless of success or failure.
+-                    $this->sendBioData();
+-                } catch (\Throwable) {
+-                    // TODO: it should try 3 times before giving up
++                    $this->connection?->close();
++                } catch (Throwable) {
++                    // the peer may already be gone; the state change below is what matters
+                 }
+                 $this->setState(TLSState::CLOSED);
+                 $this->logger?->debug("DTLS: DTLS shutdown process has been successfully completed. All secure connections have been terminated.");
+@@ -266,83 +272,44 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+         })();
+     }
+ 
+-    /**
+-     * Gets the underlying ICE transport.
+-     *
+-     * @return RTCIceTransportInterface The ICE transport
+-     */
+     public function getIceTransport(): RTCIceTransportInterface
+     {
+         return $this->transport;
+     }
+ 
+-    /**
+-     * Gets the certificate used by this transport.
+-     *
+-     * @return RTCCertificate The certificate
+-     */
+     public function getCertificate(): RTCCertificate
+     {
+         return $this->certificate;
+     }
+ 
+     /**
+-     * Gets the peer certificate fingerprints.
+-     *
+-     * @return array<RTCDtlsFingerprint> Array of certificate fingerprints
+-     * @throws OpenSSLException If fingerprint retrieval fails
++     * @return RTCDtlsFingerprint[]
+      */
+     public function getPeerCertificates(): array
+     {
+         return $this->certificate->getFingerprints();
+     }
+ 
+-    /**
+-     * Gets the current transport state.
+-     *
+-     * @return TLSState The current state
+-     */
+     public function getState(): TLSState
+     {
+         return $this->state;
+     }
+ 
+-    /**
+-     * Gets the logger instance.
+-     *
+-     * @return LoggerInterface|null The logger or null if not set
+-     */
+     public function getLogger(): ?LoggerInterface
+     {
+         return $this->logger;
+     }
+ 
+-    /**
+-     * Sets the logger instance.
+-     *
+-     * @param LoggerInterface|null $logger The logger to set
+-     */
+     public function setLogger(?LoggerInterface $logger): void
+     {
+         $this->logger = $logger;
+-        $this->tls->setLogger($logger);
+     }
+ 
+-    /**
+-     * Sets the SCTP transport for data channels.
+-     *
+-     * @param RTCSctpTransportInterface|null $sctpReceiver The SCTP transport to set
+-     */
+     public function setSctpReceiver(?RTCSctpTransportInterface $sctpReceiver = null): void
+     {
+         $this->sctpReceiver = $sctpReceiver;
+     }
+ 
+-    /**
+-     * Sets the transport state and emits statechange event if changed.
+-     *
+-     * @param TLSState $state The new state
+-     */
+     public function setState(TLSState $state): void
+     {
+         if ($state !== $this->state) {
+@@ -352,62 +319,39 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+         }
+     }
+ 
+-    /**
+-     * Sets the transport to failed state with the given reason.
+-     *
+-     * @param string $reason The failure reason
+-     * @param Throwable|null $e Optional exception that caused the failure
+-     */
+-    private function setFailedState(string $reason, ?Throwable $e = null): void
++    private function setFailedState(string $reason): void
+     {
+         $this->logger?->error("DTLS: Failed handshaking.", ["reason" => $reason]);
+         $this->setState(TLSState::FAILED);
+     }
+ 
+     /**
+-     * Handles transport disconnection or errors.
+-     *
+-     * @throws DTLSException Always throws to indicate connection loss
++     * Feeds an inbound datagram from the ICE transport into the DTLS connection.
+      */
+-    private function handleDisconnectingError()
++    private function onReceivedData(string $data): void
+     {
+-        $this->setState(TLSState::CLOSED);
+-        $this->logger?->alert("DTLS: Connection lost");
+-        $this->sctpReceiver?->onErrorOrClosed();
++        $this->reportTransport->handleReceived($data);
+ 
+-        throw new DTLSException("DTLS: Connection lost");
++        try {
++            $this->connection?->handle($data);
++        } catch (NativeDtlsException $e) {
++            $this->logger?->debug(sprintf("DTLS: %s", $e->getMessage()));
++        }
+     }
+ 
+     /**
+-     * Handles incoming SCTP data channel messages.
+-     *
+-     * @param string $data The received SCTP data
+-     * @throws SysCallException If a system call fails
++     * @throws DTLSException Always throws to indicate connection loss
+      */
+-    private function handleSctpData(string $data): void
++    private function handleDisconnectingError(): void
+     {
+-        try {
+-            $decryptedData = $this->tls->decrypt($data);
+-        } catch (ZeroReturnException) {
+-            $this->stop();
+-            return;
+-        } catch (TLSException|OpenSSLException) {
+-            return;
+-        }
+-        $this->sendBioData();
++        $this->cancelRetransmits();
++        $this->setState(TLSState::CLOSED);
++        $this->logger?->alert("DTLS: Connection lost");
++        $this->sctpReceiver?->onErrorOrClosed();
+ 
+-        if (strlen($decryptedData) > 0) {
+-            $this->sctpReceiver->onReceived($decryptedData);
+-        } else {
+-            $this->logger->debug("DTLS: failed decrypted data");
+-        }
++        throw new DTLSException("DTLS: Connection lost");
+     }
+ 
+-    /**
+-     * Gets the current transport statistics.
+-     *
+-     * @return RTCStatsReport The statistics report
+-     */
+     public function getStats(): RTCStatsReport
+     {
+         $this->reportTransport->dateTime = new \DateTimeImmutable();
+@@ -419,16 +363,23 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
+     }
+ 
+     /**
+-     * Determines the handshake state based on the current role.
+-     *
+-     * @return SSLHandshakeState The appropriate handshake state
++     * Resolves an "auto" role the way the ICE role dictates - the controlling agent takes the
++     * DTLS server side.
+      */
+-    private function getHandShakeState(): SSLHandshakeState
++    private function resolveRole(): DtlsRole
+     {
+         if ($this->role === DtlsRole::Auto) {
+             $this->role = $this->transport->getRole() === IceRole::Controlling ? DtlsRole::Server : DtlsRole::Client;
+         }
+ 
+-        return $this->role === DtlsRole::Server ? SSLHandshakeState::Accept : SSLHandshakeState::Connect;
++        return $this->role;
++    }
++
++    private function cancelRetransmits(): void
++    {
++        if ($this->retransmitTimer !== null) {
++            Loop::cancelTimer($this->retransmitTimer);
++            $this->retransmitTimer = null;
++        }
+     }
+ }
+diff --git a/src/dtls/src/TLS/Handshake.php b/src/dtls/src/TLS/Handshake.php
+deleted file mode 100644
+index d2d67db..0000000
+--- a/src/dtls/src/TLS/Handshake.php
++++ /dev/null
+@@ -1,232 +0,0 @@
+-<?php
+-
+-/**
+- * This file is part of the PHP WebRTC package.
+- *
+- * (c) Amin Yazdanpanah <https://www.aminyazdanpanah.com/#contact>
+- *
+- * For the full copyright and license information, please view the LICENSE
+- * file that was distributed with this source code.
+- */
+-
+-namespace Webrtc\DTLS\TLS;
+-
+-use Exception;
+-use React\EventLoop\Loop;
+-use React\EventLoop\LoopInterface;
+-use React\EventLoop\TimerInterface;
+-use React\Promise\Deferred;
+-use React\Promise\PromiseInterface;
+-use Throwable;
+-use Webrtc\DTLS\Enum\SSLHandshakeState;
+-use Webrtc\DTLS\Exception\HandshakeException;
+-use Webrtc\ICE\RTCIceTransportInterface;
+-use Webrtc\Mixin\EventForwarder;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\Exception\WantReadException;
+-use Webrtc\SSL\Exception\WantWriteException;
+-use Webrtc\SSL\SSL\BIOInterface;
+-use Webrtc\SSL\SSL\SSLInterface;
+-use Webrtc\Stats\enum\TLSState;
+-
+-/**
+- * Class Handshake
+- *
+- * Manages the DTLS (Datagram Transport Layer Security) handshake process using an asynchronous event loop.
+- * This class handles both client and server-side handshake operations, managing timeouts, BIO buffer operations,
+- * and state transitions during the TLS handshake process.
+- *
+- * @package Webrtc\DTLS\TLS
+- */
+-class Handshake
+-{
+-    use EventForwarder;
+-
+-    /** @var Deferred The deferred promise for handshake completion */
+-    private Deferred $deferred;
+-
+-    /** @var LoopInterface The event loop instance */
+-    private LoopInterface $loop;
+-
+-    /** @var SSLInterface The SSL context for the handshake */
+-    private SSLInterface $ssl;
+-
+-    /** @var RTCIceTransportInterface|null The transport layer for sending/receiving data */
+-    private ?RTCIceTransportInterface $transport;
+-
+-    /** @var BIOInterface The BIO buffer for SSL operations */
+-    private BIOInterface $bio;
+-
+-    /** @var TimerInterface|null Periodic timer for checking handshake status */
+-    private ?TimerInterface $periodicCheck;
+-
+-    /** @var TimerInterface|null Timer for handling DTLS timeout */
+-    private ?TimerInterface $timer = null;
+-
+-    /** @var array Listeners for transport events */
+-    private array $listeners;
+-
+-    /**
+-     * Handshake constructor.
+-     *
+-     * Initializes the handshake process with the given TLS context, transport, and initial state.
+-     *
+-     * @param TLS $tls The TLS context for this handshake
+-     * @param RTCIceTransportInterface $transport The transport layer for communication
+-     * @param SSLHandshakeState $state The initial handshake state (Accept or Connect)
+-     */
+-    public function __construct(private readonly TLS $tls, RTCIceTransportInterface $transport, private readonly SSLHandshakeState $state)
+-    {
+-        $this->deferred = new Deferred();
+-        $this->transport = $transport;
+-        $this->loop = Loop::get();
+-        $this->ssl = $tls->getSsl();
+-        $this->bio = $tls->getBio();
+-        $this->setSSLHandshakeState();
+-        $this->listeners = $this->forwardEvents2Methods($this->transport, ['data' => 'receive']);
+-    }
+-
+-    /**
+-     * Receives data from the transport and writes it to the BIO buffer.
+-     *
+-     * This method is called when data is received on the transport layer. It cancels any pending
+-     * timeout timer and writes the received data to the BIO buffer for SSL processing.
+-     *
+-     * @param string $bytes The received data bytes
+-     * @throws OpenSSLException If writing to the BIO buffer fails
+-     */
+-    private function receive(string $bytes): void
+-    {
+-        if ($this->timer) {
+-            $this->loop->cancelTimer($this->timer);
+-            $this->timer = null;
+-        }
+-
+-        $this->bio->write($bytes);
+-    }
+-
+-    /**
+-     * Initiates the handshake process.
+-     *
+-     * Starts the handshake process and returns a promise that will be resolved when the handshake
+-     * completes successfully or rejected if it fails.
+-     *
+-     * @return PromiseInterface A promise representing the handshake completion
+-     */
+-    public function do(): PromiseInterface
+-    {
+-        $this->periodicCheckHandshakeStatus();
+-        return $this->deferred->promise();
+-    }
+-
+-    /**
+-     * Sets the SSL handshake state based on the constructor parameter.
+-     *
+-     * Configures the SSL context to either accept (server mode) or connect (client mode).
+-     */
+-    private function setSSLHandshakeState(): void
+-    {
+-        if ($this->state === SSLHandshakeState::Accept) {
+-            $this->ssl->setAcceptState();
+-        } else {
+-            $this->ssl->setConnectState();
+-        }
+-    }
+-
+-    /**
+-     * Periodically checks the handshake status.
+-     *
+-     * Sets up a periodic timer to check the handshake progress, sending/receiving data as necessary
+-     * and handling timeouts or errors that may occur during the process.
+-     */
+-    private function periodicCheckHandshakeStatus(): void
+-    {
+-        $this->periodicCheck = $this->loop->addPeriodicTimer(0, function (): void {
+-            try {
+-                $this->ssl->doHandshake();
+-                $this->cleanUp();
+-                $this->deferred->resolve(true);
+-            } catch (WantReadException) {
+-                $this->sendBIOData();
+-            } catch (WantWriteException) {
+-                // Handshake needs more writing, handled by async loop
+-            } catch (Throwable $e) {
+-                $this->deferred->reject(new HandshakeException("Handshake Failed", $e->getCode(), $e));
+-            }
+-            if (!$this->timer && $timeout = $this->ssl->dtlsV1GetTimeout()) {
+-                $this->handleDTLSTimeout($timeout);
+-            }
+-        });
+-    }
+-
+-    /**
+-     * Sends data from the BIO buffer to the transport.
+-     *
+-     * Reads any pending data from the BIO buffer and send it through the transport layer.
+-     * This is typically called when SSL indicates it has data ready to send.
+-     */
+-    private function sendBIOData(): void
+-    {
+-        if ($data = $this->bio->read()) {
+-            try {
+-                $this->transport->send($data);
+-            } catch (Exception) {
+-                // Silently handle transport send errors
+-            }
+-        }
+-    }
+-
+-    /**
+-     * Handles DTLS timeout events.
+-     *
+-     * Sets up a timer to handle DTLS-specific timeout requirements. When the timer expires,
+-     * it processes the timeout and sends any pending BIO data.
+-     *
+-     * @param float $timeout The timeout duration in seconds
+-     */
+-    private function handleDTLSTimeout(float $timeout): void
+-    {
+-        $this->timer = $this->loop->addTimer($timeout, function () {
+-            $this->ssl->dtlsV1HandleTimeout();
+-            $this->sendBIOData();
+-        });
+-    }
+-
+-    /**
+-     * Cleans up resources after handshake completion.
+-     *
+-     * Removes event listeners, updates the TLS state, sends any remaining BIO data,
+-     * and cancels all active timers.
+-     */
+-    private function cleanUp(): void
+-    {
+-        $this->removeMessageListener();
+-        $this->tls->setState(TLSState::CONNECTED);
+-        $this->sendBIODataUntilEnd();
+-
+-        $this->loop->cancelTimer($this->periodicCheck);
+-        if ($this->timer) {
+-            $this->loop->cancelTimer($this->timer);
+-        }
+-    }
+-
+-    /**
+-     * Removes the data event listener from the transport.
+-     */
+-    private function removeMessageListener(): void
+-    {
+-        $this->transport->removeListener('data', $this->listeners[0]);
+-    }
+-
+-    /**
+-     * Sends all remaining data from the BIO buffer.
+-     *
+-     * Continuously reads and sends any remaining data from the BIO buffer until it's empty.
+-     */
+-    private function sendBIODataUntilEnd(): void
+-    {
+-        while ($data = $this->bio->read()) {
+-            $this->transport->send($data);
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/src/dtls/src/TLS/TLS.php b/src/dtls/src/TLS/TLS.php
+deleted file mode 100644
+index aa16485..0000000
+--- a/src/dtls/src/TLS/TLS.php
++++ /dev/null
+@@ -1,398 +0,0 @@
+-<?php
+-
+-/**
+- * This file is part of the PHP WebRTC package.
+- *
+- * (c) Amin Yazdanpanah <https://www.aminyazdanpanah.com/#contact>
+- *
+- * For the full copyright and license information, please view the LICENSE
+- * file that was distributed with this source code.
+- */
+-
+-namespace Webrtc\DTLS\TLS;
+-
+-use Psr\Log\LoggerInterface;
+-use React\Promise\PromiseInterface;
+-use Webrtc\DTLS\Enum\SSLHandshakeState;
+-use Webrtc\DTLS\Exception\TLSException;
+-use Webrtc\DTLS\RTCCertificate;
+-use Webrtc\ICE\RTCIceTransportInterface;
+-use Webrtc\SDP\DtlsParameter\RTCDtlsFingerprint;
+-use Webrtc\SSL\Crypto\PrivateKeyInterface;
+-use Webrtc\SSL\Crypto\X509;
+-use Webrtc\SSL\Enum\BioMethod;
+-use Webrtc\SSL\Enum\ContextMethod;
+-use Webrtc\SSL\Enum\Verify;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\Exception\SSLException;
+-use Webrtc\SSL\Exception\SysCallException;
+-use Webrtc\SSL\Exception\WantReadException;
+-use Webrtc\SSL\Exception\WantWriteException;
+-use Webrtc\SSL\Exception\WantX509LookupException;
+-use Webrtc\SSL\Exception\ZeroReturnException;
+-use Webrtc\SSL\OpenSSL;
+-use Webrtc\SSL\SSL\BIO;
+-use Webrtc\SSL\SSL\BIOInterface;
+-use Webrtc\SSL\SSL\Context;
+-use Webrtc\SSL\SSL\SSL;
+-use Webrtc\SSL\SSL\SSLInterface;
+-use Webrtc\Stats\enum\TLSState;
+-
+-/**
+- * Class TLS
+- *
+- * Manages DTLS/TLS connections for WebRTC, providing encryption, decryption, and handshake functionality.
+- * This class encapsulates the OpenSSL operations needed for secure communication over WebRTC data channels.
+- *
+- * Key responsibilities:
+- * - Managing the TLS/DTLS connection state
+- * - Performing encryption and decryption of data
+- * - Handling the DTLS handshake process
+- * - Validating peer certificates
+- * - Managing SRTP (Secure Real-time Transport Protocol) profiles
+- * - Exporting keying material for SRTP
+- *
+- * @package Webrtc\DTLS\TLS
+- */
+-class TLS
+-{
+-    /** @var int Default buffer size for BIO operations */
+-    private const BUFFER_SIZE = 1500;
+-
+-    /** @var array Supported cipher suites for the TLS connection */
+-    private const SUPPORTED_CIPHER_SUITES = [
+-        // AES-128-GCM-SHA256
+-        "ECDHE-ECDSA-AES128-GCM-SHA256",
+-        "ECDHE-RSA-AES128-GCM-SHA256",
+-
+-        // AES-256-CBC-SHA
+-        "ECDHE-ECDSA-AES256-SHA",
+-        "ECDHE-RSA-AES256-SHA",
+-
+-        // AES-256-GCM-SHA384
+-        "ECDHE-ECDSA-AES256-GCM-SHA384",
+-        "ECDHE-RSA-AES256-GCM-SHA384"
+-    ];
+-
+-    /**
+-     * @var array Protection profiles advertised in the DTLS use_srtp extension.
+-     *
+-     * This build carries no SRTP implementation, but the extension is still offered so the
+-     * handshake stays byte compatible with peers that expect it.
+-     */
+-    private const SRTP_PROTECTION_PROFILES = [
+-        "SRTP_AEAD_AES_256_GCM",
+-        "SRTP_AEAD_AES_128_GCM",
+-        "SRTP_AES128_CM_SHA1_80"
+-    ];
+-
+-    /** @var SSLInterface The SSL connection instance */
+-    private SSLInterface $ssl;
+-
+-    /** @var Context The SSL context */
+-    private Context $context;
+-
+-    /** @var BIOInterface The BIO buffer for SSL operations */
+-    private BIOInterface $bio;
+-
+-    /** @var TLSState Current state of the TLS connection */
+-    private TLSState $state = TLSState::NEW;
+-
+-    /** @var LoggerInterface|null Optional logger for debugging */
+-    private ?LoggerInterface $logger = null;
+-
+-    /**
+-     * TLS constructor.
+-     *
+-     * Initializes the TLS instance with the provided certificate and sets up the SSL context,
+-     * BIO buffer, and SSL connection.
+-     *
+-     * @param RTCCertificate $certificate The certificate to use for this TLS connection
+-     * @throws OpenSSLException If OpenSSL initialization fails
+-     */
+-    public function __construct(private readonly RTCCertificate $certificate)
+-    {
+-        OpenSSL::init();
+-        $this->context = $this->createContext();
+-        $this->bio = $this->createBIO();
+-        $this->ssl = $this->createSSL();
+-    }
+-
+-    /**
+-     * Starts the DTLS handshake process.
+-     *
+-     * Creates a new Handshake instance and initiates the handshake process with the given transport.
+-     * The handshake can be either as a client (Connect) or server (Accept).
+-     *
+-     * @param RTCIceTransportInterface $transport The ICE transport to use for communication
+-     * @param SSLHandshakeState $state Whether to initiate as client or server
+-     * @return PromiseInterface A promise that resolves when the handshake completes
+-     */
+-    public function startHandshaking(RTCIceTransportInterface $transport, SSLHandshakeState $state): PromiseInterface
+-    {
+-        $handshake = new Handshake($this, $transport, $state);
+-        return $handshake->do();
+-    }
+-
+-    /**
+-     * Encrypts data using the established TLS connection.
+-     *
+-     * @param string $data The plaintext data to encrypt
+-     * @return string The encrypted data
+-     * @throws OpenSSLException If an OpenSSL error occurs
+-     * @throws SysCallException If a system call fails
+-     * @throws TLSException If the TLS connection is not in the correct state
+-     * @throws WantReadException If more data needs to be read to complete the operation
+-     * @throws WantWriteException If more data needs to be written to complete the operation
+-     * @throws WantX509LookupException If certificate lookup is required
+-     * @throws ZeroReturnException If the connection was closed
+-     * @throws SSLException For general SSL errors
+-     */
+-    public function encrypt(string $data): string
+-    {
+-        $this->checkState();
+-        $this->ssl->write($data);
+-        return $this->bio->read();
+-    }
+-
+-    /**
+-     * Decrypts data using the established TLS connection.
+-     *
+-     * @param string $data The encrypted data to decrypt
+-     * @return string The decrypted plaintext data
+-     * @throws OpenSSLException If an OpenSSL error occurs
+-     * @throws SSLException For general SSL errors
+-     * @throws SysCallException If a system call fails
+-     * @throws TLSException If the TLS connection is not in the correct state
+-     * @throws WantReadException If more data needs to be read to complete the operation
+-     * @throws WantWriteException If more data needs to be written to complete the operation
+-     * @throws WantX509LookupException If certificate lookup is required
+-     * @throws ZeroReturnException If the connection was closed
+-     */
+-    public function decrypt(string $data): string
+-    {
+-        $this->checkState();
+-        $this->bio->write($data);
+-        return $this->ssl->read(self::BUFFER_SIZE);
+-    }
+-
+-    /**
+-     * Factory method to create a new TLS instance.
+-     *
+-     * @param RTCCertificate $certificate The certificate to use
+-     * @return static A new TLS instance
+-     * @throws OpenSSLException If initialization fails
+-     */
+-    public static function create(RTCCertificate $certificate): static
+-    {
+-        return new static($certificate);
+-    }
+-
+-    /**
+-     * Validates the peer's certificate against provided fingerprints.
+-     *
+-     * @param RTCDtlsFingerprint[] $peerCerts Array of peer certificate fingerprints to validate against
+-     * @return bool True if the peer's certificate matches one of the provided fingerprints
+-     * @throws OpenSSLException If certificate validation fails
+-     * @throws TLSException If the TLS connection is not in the correct state
+-     */
+-    public function validatePeerCertificate(array $peerCerts): bool
+-    {
+-        $this->checkState();
+-        $peerCertDigits = $this->ssl->getPeerCertificateDigest();
+-        $found = false;
+-        foreach ($peerCerts as $cert) {
+-            if ($cert->isAlgorithm("sha-256") && strtolower($cert->value) === strtolower($peerCertDigits)) {
+-                $found = true;
+-                break;
+-            }
+-        }
+-        return $found;
+-    }
+-
+-    /**
+-     * Exports keying material for SRTP.
+-     *
+-     * @param int $keyLength Length of the key material needed
+-     * @param int $saltLent Length of the salt needed
+-     * @return string The exported keying material
+-     * @throws OpenSSLException If key export fails
+-     * @throws TLSException If the TLS connection is not in the correct state
+-     */
+-    public function exportKeyingMaterial(int $keyLength, int $saltLent): string
+-    {
+-        $this->checkState();
+-        return $this->ssl->exportKeyingMaterial("EXTRACTOR-dtls_srtp", 2 * ($keyLength + $saltLent));
+-    }
+-
+-    /**
+-     * Gets the selected SRTP protection profile.
+-     *
+-     * @return string The name of the selected SRTP profile
+-     * @throws TLSException If the TLS connection is not in the correct state
+-     */
+-    public function getSelectedSrtpProfile(): string
+-    {
+-        $this->checkState();
+-        return $this->ssl->getSelectedSrtpProfile();
+-    }
+-
+-    /**
+-     * Creates the SSL context for the connection.
+-     *
+-     * @return Context The created SSL context
+-     */
+-    private function createContext(): Context
+-    {
+-        $ctx = new Context(ContextMethod::DTLS_METHOD);
+-        $ctx->setVerify(Verify::PEER->value | Verify::FAIL_IF_NO_PEER_CERT->value, fn(...$args) => true);
+-        $ctx->setCipherList(implode(":", self::SUPPORTED_CIPHER_SUITES));
+-        $ctx->setTlsextUseSrtp(implode(":", self::SRTP_PROTECTION_PROFILES));
+-        $this->setCertAndPrivateKey($ctx);
+-        $this->setLoggerInfo($ctx);
+-
+-        return $ctx;
+-    }
+-
+-    /**
+-     * Creates the SSL connection instance.
+-     *
+-     * @return SSL The created SSL connection
+-     */
+-    private function createSSL(): SSL
+-    {
+-        return new SSL($this->context, $this->bio);
+-    }
+-
+-    /**
+-     * Creates the BIO buffer for SSL operations.
+-     *
+-     * @return BIOInterface The created BIO buffer
+-     */
+-    private function createBIO(): BIOInterface
+-    {
+-        $method = BioMethod::s_mem;
+-        $bio = new BIO($method);
+-        $bio->setBufferSize(self::BUFFER_SIZE);
+-
+-        return $bio;
+-    }
+-
+-    /**
+-     * Shuts down the SSL connection gracefully.
+-     *
+-     * @return bool True if shutdown was successful
+-     * @throws OpenSSLException If an OpenSSL error occurs
+-     * @throws SSLException For general SSL errors
+-     * @throws SysCallException If a system call fails
+-     * @throws WantReadException If more data needs to be read to complete the operation
+-     * @throws WantWriteException If more data needs to be written to complete the operation
+-     * @throws WantX509LookupException If certificate lookup is required
+-     * @throws ZeroReturnException If the connection was closed
+-     */
+-    public function shutdown(): bool
+-    {
+-        if ($this->ssl->shutdown()) {
+-            $this->setState(TLSState::CLOSED);
+-            return true;
+-        }
+-
+-        return false;
+-    }
+-
+-    /**
+-     * Gets the SSL connection instance.
+-     *
+-     * @return SSLInterface The SSL connection
+-     */
+-    public function getSsl(): SSLInterface
+-    {
+-        return $this->ssl;
+-    }
+-
+-    /**
+-     * Gets the BIO buffer instance.
+-     *
+-     * @return BIOInterface The BIO buffer
+-     */
+-    public function getBio(): BIOInterface
+-    {
+-        return $this->bio;
+-    }
+-
+-    /**
+-     * Gets the current TLS connection state.
+-     *
+-     * @return TLSState The current state
+-     */
+-    public function getState(): TLSState
+-    {
+-        return $this->state;
+-    }
+-
+-    /**
+-     * Sets the TLS connection state.
+-     *
+-     * @param TLSState $state The new state to set
+-     */
+-    public function setState(TLSState $state): void
+-    {
+-        $this->state = $state;
+-    }
+-
+-    /**
+-     * Verifies that the TLS connection is in the correct state for operations.
+-     *
+-     * @throws TLSException If the connection is not in the CONNECTED state
+-     */
+-    private function checkState(): void
+-    {
+-        if ($this->state !== TLSState::CONNECTED) {
+-            throw new TLSException("TLS is not connected");
+-        }
+-    }
+-
+-    /**
+-     * Configures the certificate and private key in the SSL context.
+-     *
+-     * @param Context $ctx The SSL context to configure
+-     */
+-    private function setCertAndPrivateKey(Context $ctx): void
+-    {
+-        $certificate = $this->certificate->getCertificate();
+-        $privateKey = $this->certificate->getPrivateKey();
+-
+-        if ($certificate instanceof X509 && $privateKey instanceof PrivateKeyInterface) {
+-            $ctx->useCertificate($certificate);
+-            $ctx->usePrivateKey($privateKey);
+-        } elseif (is_string($certificate) && is_string($privateKey)) {
+-            $ctx->useCertificateFile($certificate);
+-            $ctx->usePrivateKeyFile($privateKey);
+-        }
+-
+-        $ctx->checkPrivateKey();
+-    }
+-
+-    /**
+-     * Configures logging for the SSL context if a logger is set.
+-     *
+-     * @param Context $ctx The SSL context to configure
+-     */
+-    private function setLoggerInfo(Context $ctx): void
+-    {
+-        // Currently commented out - would enable logging if logger is set
+-        if ($this->logger) {
+-            $ctx->setInfoCallBack($this->logger);
+-        }
+-    }
+-
+-    /**
+-     * Sets the logger for this TLS instance.
+-     *
+-     * @param LoggerInterface|null $logger The logger instance or null to disable logging
+-     */
+-    public function setLogger(?LoggerInterface $logger): void
+-    {
+-        $this->logger = $logger;
+-    }
+-}
+\ No newline at end of file
+diff --git a/src/sctp/src/RTCSctpTransport.php b/src/sctp/src/RTCSctpTransport.php
+index c897c7a..b1c39b9 100644
+--- a/src/sctp/src/RTCSctpTransport.php
++++ b/src/sctp/src/RTCSctpTransport.php
+@@ -44,13 +44,6 @@ use Webrtc\SCTP\Param\StreamResetOutgoingParam;
+ use Webrtc\SCTP\Param\StreamResetResponseParam;
+ use Webrtc\SCTP\Trait\DataChannel;
+ use Webrtc\SDP\SctpParameter\RTCSctpCapabilities;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\Exception\SSLException;
+-use Webrtc\SSL\Exception\SysCallException;
+-use Webrtc\SSL\Exception\WantReadException;
+-use Webrtc\SSL\Exception\WantWriteException;
+-use Webrtc\SSL\Exception\WantX509LookupException;
+-use Webrtc\SSL\Exception\ZeroReturnException;
+ use Webrtc\Stats\enum\TLSState;
+ use function React\Async\async;
+ 
+@@ -256,14 +249,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Start the SCTP association with the given remote port.
+      *
+      * @param int $remotePort Remote SCTP port to connect to.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     public function start(int $remotePort): void
+     {
+         if (!$this->started) {
+@@ -285,14 +270,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      *
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     public function stop(): void
+     {
+         $this->transport->removeSctpReceiver($this);
+@@ -309,14 +286,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      *
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     private function init(): void
+     {
+@@ -339,7 +308,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Send a chunk asynchronously over the DTLS transport.
+      *
+      * @param Chunk $chunk The SCTP chunk to send.
+-     * @throws OpenSSLException|SSLException|SysCallException|WantReadException|WantWriteException|WantX509LookupException|ZeroReturnException
++     * @throws ZeroReturnException
+      */
+     public function sendChunk(Chunk $chunk): void
+     {
+@@ -934,14 +903,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Handle data received from the network.
+      *
+      * @param string $data The received data.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function onReceived(string $data): void
+     {
+@@ -1173,14 +1134,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Handle a SACK chunk.
+      *
+      * @param SackChunk $chunk The SACK chunk.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     function receiveSackChunk(SackChunk $chunk): void
+     {
+@@ -1352,14 +1305,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param HeartbeatChunk $chunk The received HEARTBEAT chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveHeartbeatChunk(HeartbeatChunk $chunk): void
+     {
+@@ -1373,14 +1318,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param AbortChunk $chunk The received ABORT chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveAbortChunk(AbortChunk $chunk): void
+     {
+@@ -1395,14 +1332,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param ShutdownChunk $chunk The received SHUTDOWN chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveShutdownChunk(ShutdownChunk $chunk): void
+     {
+@@ -1421,14 +1350,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param ShutdownCompleteChunk $chunk The received SHUTDOWN_COMPLETE chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveShutdownCompleteChunk(ShutdownCompleteChunk $chunk): void
+     {
+@@ -1446,14 +1367,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param ReconfigChunk $chunk The received RECONFIG chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveReconfigChunk(ReconfigChunk $chunk): void
+     {
+@@ -1476,14 +1389,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param InitChunk $chunk The received INIT chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveInitChunk(InitChunk $chunk): void
+     {
+@@ -1534,14 +1439,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param CookieEchoChunk $chunk The received COOKIE_ECHO chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveCookieEchoChunk(CookieEchoChunk $chunk): void
+     {
+@@ -1582,14 +1479,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param InitAckChunk $chunk The received INIT_ACK chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveInitAckChunk(InitAckChunk $chunk): void
+     {
+@@ -1640,14 +1529,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param CookieAckChunk $chunk The received COOKIE_ACK chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveCookieAckChunk(CookieAckChunk $chunk): void
+     {
+@@ -1665,14 +1546,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      *
+      * @param ErrorChunk $chunk The received ERROR chunk.
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveErrorChunk(ErrorChunk $chunk): void
+     {
+@@ -1689,14 +1562,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Handle a RE-CONFIG parameter.
+      *
+      * @param StreamParamInterface $param The RE-CONFIG parameter.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function receiveReconfigParam(StreamParamInterface $param): void
+     {
+@@ -1756,14 +1621,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Send a RE-CONFIG parameter.
+      *
+      * @param StreamParamInterface $param The RE-CONFIG parameter.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function sendReconfigParam(StreamParamInterface $param): void
+     {
+@@ -1787,14 +1644,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Build and send a selective acknowledgement (SACK) chunk.
+      *
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function sendSack(): void
+     {
+@@ -1826,14 +1675,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+      * Transition the SCTP association to a new state.
+      *
+      * @param State $state The new state.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function setState(State $state): void
+     {
+@@ -1867,14 +1708,6 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+ 
+     /**
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function onErrorOrClosed(): void
+     {
+diff --git a/src/sctp/src/Trait/DataChannel.php b/src/sctp/src/Trait/DataChannel.php
+index 9ed2cc9..24db4aa 100644
+--- a/src/sctp/src/Trait/DataChannel.php
++++ b/src/sctp/src/Trait/DataChannel.php
+@@ -26,13 +26,6 @@ use Webrtc\SCTP\Enum\State;
+ use Webrtc\SCTP\Param\StreamResetOutgoingParam;
+ use Webrtc\SCTP\SctpConstant;
+ use Webrtc\SCTP\SctpUtility;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\Exception\SSLException;
+-use Webrtc\SSL\Exception\SysCallException;
+-use Webrtc\SSL\Exception\WantReadException;
+-use Webrtc\SSL\Exception\WantWriteException;
+-use Webrtc\SSL\Exception\WantX509LookupException;
+-use Webrtc\SSL\Exception\ZeroReturnException;
+ 
+ /**
+  * Trait DataChannel
+@@ -141,14 +134,6 @@ trait DataChannel
+      * Ensures the data channel task is started if it's not already running.
+      *
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     private function processForwardTsn(): void
+     {
+         if ($this->forwardTsnChunk !== null) {
+@@ -180,14 +165,6 @@ trait DataChannel
+      * from the outbound queue. It ensures that the flight size doesn’t exceed the congestion window (cwnd).
+      *
+      * @param int $cwnd The current congestion window size.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     private function retransmitAndTransmit(int $cwnd): void
+     {
+         $retransmitEarliest = true;
+@@ -263,14 +240,6 @@ trait DataChannel
+      * - Handles retransmission of chunks and transmits chunks from the outbound queue.
+      *
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     public function transmit(): void
+     {
+         $this->processForwardTsn();
+@@ -344,14 +313,6 @@ trait DataChannel
+      * @param int|null $maxRetransmits
+      * @param bool|null $ordered
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     public function sendDataStream(
+         int    $streamId,
+         int    $ppId,
+@@ -459,14 +420,6 @@ trait DataChannel
+      * Attempts to flush buffered data to the SCTP layer, waiting for the association to be established.
+      *
+      * @return void
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+-     */
+     public function dataChannelFlush(): void
+     {
+         if ($this->state != State::ESTABLISHED) {
+@@ -654,14 +607,6 @@ trait DataChannel
+      * @param RTCDataChannel $channel The channel to send data over.
+      * @param string $data The data to send.
+      * @param bool $binary Send as a binary message instead of guessing the type from the payload.
+-     * @throws OpenSSLException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws TLSException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function dataChannelSend(RTCDataChannel $channel, string $data, bool $binary = false): void
+     {
+diff --git a/src/webrtc/src/RTCPeerConnection.php b/src/webrtc/src/RTCPeerConnection.php
+index 9a8e872..08f645b 100644
+--- a/src/webrtc/src/RTCPeerConnection.php
++++ b/src/webrtc/src/RTCPeerConnection.php
+@@ -42,13 +42,6 @@ use Webrtc\SDP\GroupDescription;
+ use Webrtc\SDP\MediaDescription;
+ use Webrtc\SDP\RTCSessionDescription;
+ use Webrtc\SDP\SessionDescription;
+-use Webrtc\SSL\Exception\OpenSSLException;
+-use Webrtc\SSL\Exception\SSLException;
+-use Webrtc\SSL\Exception\SysCallException;
+-use Webrtc\SSL\Exception\WantReadException;
+-use Webrtc\SSL\Exception\WantWriteException;
+-use Webrtc\SSL\Exception\WantX509LookupException;
+-use Webrtc\SSL\Exception\ZeroReturnException;
+ use Webrtc\Stats\enum\TLSState;
+ use Webrtc\Stats\RTCStatsReport;
+ use Webrtc\Webrtc\Enum\ConnectionState;
+@@ -207,7 +200,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      *
+      * @param array|RTCConfiguration|null $configuration Configuration options for the connection
+      * @throws RTCCertificateException If certificate generation fails
+-     * @throws OpenSSLException|DateInvalidOperationException If there's an SSL-related error
++     * @throws DateInvalidOperationException If there's an SSL-related error
+      */
+     public function __construct(null|array|RTCConfigurationInterface $configuration = null)
+     {
+@@ -377,14 +370,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+     /**
+      * Closes the peer connection and terminates all transports.
+      *
+-     * @throws OpenSSLException
+-     * @throws TLSException
+-     * @throws SSLException
+-     * @throws SysCallException
+-     * @throws WantReadException
+-     * @throws WantWriteException
+-     * @throws WantX509LookupException
+-     * @throws ZeroReturnException
+      */
+     public function close(): void
+     {
+@@ -454,8 +439,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      *
+      * @param MediaDescription $mediaDescription The description to augment
+      * @param RTCDtlsTransport $dtlsTransport The transport to describe
+-     * @throws OpenSSLException
+-     */
+     private function addTransportDescription(MediaDescription $mediaDescription, RTCDtlsTransport $dtlsTransport): void
+     {
+         // ice
+@@ -486,8 +469,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      *
+      * @param string|null $mid The media identifier
+      * @return MediaDescription The created media description
+-     * @throws OpenSSLException
+-     */
+     private function createMediaDescriptionForSctp(?string $mid = null): MediaDescription
+     {
+         if ($this->sctpLegacySdp) {
+@@ -511,8 +492,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      *
+      * @param RTCDataChannelParameters $parameters Configuration for the data channel
+      * @return RTCDataChannel The created data channel
+-     * @throws OpenSSLException
+-     * @throws RandomException
+      * @throws SctpException
+      */
+     public function createDataChannel(RTCDataChannelParameters $parameters): RTCDataChannel
+@@ -531,8 +510,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+     /**
+      * Creates an SCTP transport if none exists.
+      *
+-     * @throws OpenSSLException
+-     * @throws RandomException If random number generation fails
+      * @throws SctpException If SCTP transport creation fails
+      */
+     private function createSctpTransport(): void
+@@ -548,7 +525,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      * Creates a DTLS transport.
+      *
+      * @return RTCDtlsTransport The created DTLS transport
+-     * @throws OpenSSLException If SSL operation fails
+      * @throws RandomException If random number generation fails
+      */
+     private function createDtlsTransport(): RTCDtlsTransport
+@@ -798,8 +774,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      * @param int $index The media line index in the SDP
+      * @param MediaDescription $media The media description from the remote SDP
+      * @return RTCDtlsTransport The DTLS transport for the SCTP association
+-     * @throws OpenSSLException
+-     * @throws RandomException
+      * @throws SctpException
+      */
+     private function getSctpDtlsTransport(int $index, MediaDescription $media): RTCDtlsTransport
+@@ -913,7 +887,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
+      * @throws RandomException If random number generation fails
+      * @throws TLSException If TLS handshake fails
+      * @throws DTLSException If DTLS handshake fails
+-     * @throws OpenSSLException|Throwable If SSL operation fails
++     * @throws Throwable If SSL operation fails
+      */
+     private function connect(): void
+     {

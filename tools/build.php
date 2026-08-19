@@ -123,6 +123,23 @@ foreach($requires as $name => $constraints){
 }
 //Rector cannot always rewrite array_any()/array_find() when they sit inside a condition
 $flatRequires["symfony/polyfill-php84"] = "^1.31";
+//the DTLS handshake is ours rather than upstream's, so it never appears in a package manifest
+$flatRequires["altayofficial/dtls"] = "^1.0";
+
+//mdns declares ext-ffi without ever calling into it. Dropping the requirement is what makes this
+//package usable on a statically linked build, so it is verified rather than assumed: if any
+//shipped source actually touches FFI, the requirement was real and the build must not lie.
+unset($flatRequires["ext-ffi"]);
+$ffiUsers = [];
+foreach(iterateSources(ROOT . "/src") as $file){
+	if(preg_match('/\\bFFI\\b/', file_get_contents($file)) === 1){
+		$ffiUsers[] = ltrim(substr($file, strlen(ROOT)), "/");
+	}
+}
+if($ffiUsers !== []){
+	fwrite(STDERR, "ext-ffi was dropped but these still use it:\n  " . implode("\n  ", $ffiUsers) . "\n");
+	exit(1);
+}
 ksort($flatRequires);
 
 file_put_contents(ROOT . "/composer.json", json_encode([
@@ -132,6 +149,10 @@ file_put_contents(ROOT . "/composer.json", json_encode([
 	"license" => array_keys($licenseNames),
 	"require" => $flatRequires,
 	"replace" => $replace,
+	//altayofficial/dtls is not on Packagist
+	"repositories" => [
+		["type" => "vcs", "url" => "https://github.com/altayofficial/dtls"]
+	],
 	"autoload" => array_filter([
 		"psr-4" => $psr4,
 		"classmap" => $classmap

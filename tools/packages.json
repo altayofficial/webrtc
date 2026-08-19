@@ -80,14 +80,6 @@
         }
     },
     {
-        "name": "quasarstream/ssl",
-        "repository": "https://github.com/PHP-WebRTC/ssl.git",
-        "version": "v1.0.0",
-        "psr4": {
-            "Webrtc\\SSL\\": "src"
-        }
-    },
-    {
         "name": "quasarstream/stats",
         "repository": "https://github.com/PHP-WebRTC/stats.git",
         "version": "v1.0.0",
