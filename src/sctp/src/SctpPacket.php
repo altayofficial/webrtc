@@ -126,4 +126,22 @@ class SctpPacket
         $checksum = SctpUtility::crc32c($header . "\x00\x00\x00\x00" . $data);
         return $header . pack("V", $checksum) . $data;
     }
+
+    /**
+     * Encodes several already encoded chunk bodies into one SCTP packet.
+     *
+     * SCTP carries multiple chunks per packet by design, and decode() above already reads them back,
+     * so bundling only ever concerned the sending side. One packet per chunk meant one DTLS record
+     * and one datagram per message, which is the dominant cost of moving a small message.
+     *
+     * @param string[] $encodedChunks Chunk bodies, each already padded to a 4 byte boundary
+     * @return string The binary string representation of the complete SCTP packet
+     */
+    public static function encodeChunks(int $sourcePort, int $destinationPort, int $verificationTag, array $encodedChunks): string
+    {
+        $header = pack("nnN", $sourcePort, $destinationPort, $verificationTag);
+        $data = implode("", $encodedChunks);
+        $checksum = SctpUtility::crc32c($header . "\x00\x00\x00\x00" . $data);
+        return $header . pack("V", $checksum) . $data;
+    }
 }
