@@ -15,6 +15,7 @@ use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
 use Random\RandomException;
 use React\EventLoop\Loop;
+use React\EventLoop\TimerInterface;
 use SplQueue;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
 use Webrtc\DataChannel\RTCSctpTransportInterface;
@@ -90,6 +91,14 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     private int $inboundStreamsCount = 0;
     private int $localTsn;
     private bool $sackNeeded = false;
+
+    /** @var float Longest a SACK is held back when there is nothing else to acknowledge it with */
+    private const DELAYED_SACK_TIMEOUT = 0.02;
+
+    /** @var int Data packets received since the last SACK went out */
+    private int $packetsSinceSack = 0;
+
+    private ?TimerInterface $delayedSackTimer = null;
     private ?int $lastReceivedTsn = null;
 
     // Outbound
@@ -115,6 +124,19 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
     private int $lastSackedTsn;
     private int $advancedPeerAckTsn;
+
+    /**
+     * @var int Largest bundled packet body this will build. A single DATA chunk carrying the full
+     *      USERDATA_MAX_LENGTH already exceeds this on its own, so the limit only ever stops a
+     *      second chunk from being added - it never splits one.
+     */
+    private const MAX_BUNDLED_PACKET_SIZE = 1200;
+
+    /** @var string[] Encoded DATA chunks waiting to be bundled into one packet */
+    private array $pendingChunks = [];
+
+    /** @var int Total encoded size of $pendingChunks */
+    private int $pendingChunkBytes = 0;
 
     /** @var SplQueue<DataChunk> */
     private SplQueue $outboundQueue;
@@ -314,10 +336,43 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      */
     public function sendChunk(Chunk $chunk): void
     {
-        async(function () use ($chunk) {
+        if ($this->logger !== null) {
             $this->log(sprintf(" Sent chunk %s", $chunk));
-            $this->transport->sendData($this->encodeChunk($chunk));
-        })();
+        }
+
+        // Only DATA chunks are bundled. Control chunks are left alone because some of them - INIT,
+        // INIT ACK and SHUTDOWN COMPLETE - may not share a packet with anything else at all, and
+        // ordering against queued data has to be preserved either way.
+        if (!$chunk instanceof DataChunk) {
+            $this->flushChunks();
+            async(function () use ($chunk) {
+                $this->transport->sendData($this->encodeChunk($chunk));
+            })();
+            return;
+        }
+
+        $encoded = $chunk->encode();
+        if ($this->pendingChunkBytes > 0 && $this->pendingChunkBytes + strlen($encoded) > self::MAX_BUNDLED_PACKET_SIZE) {
+            $this->flushChunks();
+        }
+        $this->pendingChunks[] = $encoded;
+        $this->pendingChunkBytes += strlen($encoded);
+    }
+
+    /**
+     * Sends everything queued by sendChunk() as a single SCTP packet.
+     */
+    public function flushChunks(): void
+    {
+        if ($this->pendingChunks === []) {
+            return;
+        }
+        $chunks = $this->pendingChunks;
+        $this->pendingChunks = [];
+        $this->pendingChunkBytes = 0;
+
+        $packet = SctpPacket::encodeChunks($this->localPort, $this->remotePort, $this->remoteVerificationTag, $chunks);
+        $this->transport->sendData($packet);
     }
 
     /**
@@ -927,9 +982,20 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
             $this->receiveChunk($chunk);
         }
 
-        // Send SACK if needed
+        // RFC 4960 6.2: acknowledge every second packet rather than every one. Acking each packet
+        // doubled the packet count on the association, and every extra packet costs a DTLS record,
+        // a datagram and a pass through the event loop on both ends.
         if ($this->sackNeeded) {
-            $this->sendSack();
+            if (++$this->packetsSinceSack >= 2) {
+                $this->sendSack();
+            } elseif ($this->delayedSackTimer === null) {
+                $this->delayedSackTimer = $this->loop->addTimer(self::DELAYED_SACK_TIMEOUT, function (): void {
+                    $this->delayedSackTimer = null;
+                    if ($this->sackNeeded) {
+                        $this->sendSack();
+                    }
+                });
+            }
         }
     }
 
@@ -986,7 +1052,10 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         for ($pos = $startPos; $reverse ? $pos >= $limit : $pos <= $limit; $pos += $step) {
             $chunk = $this->sentQueue[$pos];
             $chunk->getAttributes()->abandoned = true;
-            $chunk->getAttributes()->retransmit = false;
+            if ($chunk->getAttributes()->retransmit) {
+                $chunk->getAttributes()->retransmit = false;
+                $this->retransmitPending = max(0, $this->retransmitPending - 1);
+            }
 
             if (($reverse && ($chunk->getFlags() & SctpConstant::SCTP_DATA_FIRST_FRAG)) ||
                 (!$reverse && ($chunk->getFlags() & SctpConstant::SCTP_DATA_LAST_FRAG))) {
@@ -1231,7 +1300,10 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
                     if ($schunk->getAttributes()->misses === 3) {
                         $schunk->getAttributes()->misses = 0;
                         if (!$this->maybeAbandon($schunk)) {
-                            $schunk->getAttributes()->retransmit = true;
+                            if (!$schunk->getAttributes()->retransmit) {
+                                $schunk->getAttributes()->retransmit = true;
+                                $this->retransmitPending++;
+                            }
                         }
                         $schunk->getAttributes()->acked = false;
                         $this->decreaseFlightSize($schunk);
@@ -1260,8 +1332,10 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         if ($this->fastRecoveryExit === null) {
             if ($done && $cwndFullyUtilized) {
                 if ($this->cwnd <= $this->ssthresh) {
-                    // Slow start
-                    $this->cwnd += min($doneBytes, SctpConstant::USERDATA_MAX_LENGTH);
+                    // Slow start, with the byte counting of RFC 3465. Growing by one MTU per SACK
+                    // halves the ramp as soon as SACKs are delayed, which is exactly what a burst
+                    // cannot afford; L=2 restores the growth a per-packet SACK would have given.
+                    $this->cwnd += min($doneBytes, 2 * SctpConstant::USERDATA_MAX_LENGTH);
                 } else {
                     // Congestion avoidance
                     $this->partialBytesAcked += $doneBytes;
@@ -1671,6 +1745,11 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
         $this->sackDuplicates = [];
         $this->sackNeeded = false;
+        $this->packetsSinceSack = 0;
+        if ($this->delayedSackTimer !== null) {
+            $this->loop->cancelTimer($this->delayedSackTimer);
+            $this->delayedSackTimer = null;
+        }
     }
 
     /**

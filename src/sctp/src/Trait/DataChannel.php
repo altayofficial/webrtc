@@ -43,6 +43,8 @@ trait DataChannel
     private SplQueue $dataChannelQueue;
     /** @var RTCDataChannel[] */
     private array $dataChannels = [];
+    /** @var int Chunks currently flagged for retransmission */
+    private int $retransmitPending = 0;
 
 
     /**
@@ -69,7 +71,10 @@ trait DataChannel
         // Mark retransmitting or abandoned chunks
         foreach ($this->sentQueue as $chunk) {
             if (!$this->maybeAbandon($chunk)) {
-                $chunk->getAttributes()->retransmit = true;
+                if (!$chunk->getAttributes()->retransmit) {
+                    $chunk->getAttributes()->retransmit = true;
+                    $this->retransmitPending++;
+                }
             }
         }
         $this->updateAdvancedPeerAckPoint();
@@ -171,25 +176,27 @@ trait DataChannel
     {
         $retransmitEarliest = true;
 
-        // Retransmit chunks from the sent queue if they need retransmission
-        foreach ($this->sentQueue as $chunk) {
-            if ($chunk->getAttributes()->retransmit) {
-                if ($this->fastRecoveryTransmit) {
-                    $this->fastRecoveryTransmit = false;
-                } elseif ($this->flightSize >= $cwnd) {
-                    return; // Stop if flight size exceeds cwnd
+        // Walking the whole sent queue on every transmit call is O(queue) per call, which turns a
+        // burst into quadratic work. With no loss there is nothing flagged, so the scan is skipped.
+        if ($this->retransmitPending > 0) {
+            foreach ($this->sentQueue as $chunk) {
+                if ($chunk->getAttributes()->retransmit) {
+                    if ($this->fastRecoveryTransmit) {
+                        $this->fastRecoveryTransmit = false;
+                    } elseif ($this->flightSize >= $cwnd) {
+                        return; // Stop if flight size exceeds cwnd
+                    }
+
+                    $this->flightSizeIncrease($chunk);
+                    $this->resetChunkRetransmitState($chunk);
+                    $this->sendChunk($chunk);
+
+                    if ($retransmitEarliest) {
+                        $this->dataChannelTaskRestart();
+                    }
                 }
-
-
-                $this->flightSizeIncrease($chunk);
-                $this->resetChunkRetransmitState($chunk);
-                $this->sendChunk($chunk);
-
-                if ($retransmitEarliest) {
-                    $this->dataChannelTaskRestart();
-                }
+                $retransmitEarliest = false;
             }
-            $retransmitEarliest = false;
         }
 
         // Transmit from the outbound queue if we haven't reached the congestion window size
@@ -206,6 +213,10 @@ trait DataChannel
             // Start the datachannel task if not already running
             $this->ensureDataChannelTaskRunning();
         }
+
+        // everything queued by this burst goes out as one packet, with no extra loop iteration of
+        // latency - deferring the flush cost a full driving loop turn per packet
+        $this->flushChunks();
     }
 
     /**
@@ -228,7 +239,10 @@ trait DataChannel
     private function resetChunkRetransmitState(Chunk $chunk): void
     {
         $chunk->getAttributes()->misses = 0;
-        $chunk->getAttributes()->retransmit = false;
+        if ($chunk->getAttributes()->retransmit) {
+            $chunk->getAttributes()->retransmit = false;
+            $this->retransmitPending = max(0, $this->retransmitPending - 1);
+        }
         $chunk->getAttributes()->sentCount += 1;
     }
 
