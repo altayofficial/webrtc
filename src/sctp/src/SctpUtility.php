@@ -170,6 +170,16 @@ class SctpUtility
      */
     public static function crc32c(string $data): int
     {
+        // ext-hash implements the same Castagnoli polynomial in C and is used on every SCTP packet
+        // in both directions, so the byte at a time fallback below is only for builds without it
+        static $native = null;
+        if ($native === null) {
+            $native = in_array("crc32c", hash_algos(), true);
+        }
+        if ($native) {
+            return (int) hexdec(hash("crc32c", $data));
+        }
+
         static $table;
         if (!$table) {
             for ($n = 0; $n < 256; $n++) {
