@@ -17,6 +17,7 @@ use Random\RandomException;
 use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
 use SplQueue;
+use Throwable;
 use Webrtc\DataChannel\Enum\State as DataChannelState;
 use Webrtc\DataChannel\RTCSctpTransportInterface;
 use Webrtc\Exception\InvalidArgumentException;
@@ -372,7 +373,15 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         $this->pendingChunkBytes = 0;
 
         $packet = SctpPacket::encodeChunks($this->localPort, $this->remotePort, $this->remoteVerificationTag, $chunks);
-        $this->transport->sendData($packet);
+        try {
+            $this->transport->sendData($packet);
+        } catch (Throwable $e) {
+            // The DTLS transport refuses to send once the connection is gone. Nothing here can
+            // recover the packet, and the association is being torn down anyway - previously this
+            // was swallowed by the promise wrapper, so it must not escape now that the send is
+            // synchronous.
+            $this->log("Dropping an SCTP packet, the DTLS transport is not available: " . $e->getMessage());
+        }
     }
 
     /**
