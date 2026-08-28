@@ -1,0 +1,52 @@
+diff --git a/src/stun/src/Stun.php b/src/stun/src/Stun.php
+index 8243aa7..2ba1b0d 100644
+--- a/src/stun/src/Stun.php
++++ b/src/stun/src/Stun.php
+@@ -14,8 +14,9 @@ namespace Webrtc\STUN;
+ use Psr\Log\LoggerInterface;
+ use Ramsey\Uuid\Uuid;
+ use Random\RandomException;
+-use React\Datagram\Factory;
++use React\Datagram\Socket;
+ use React\Datagram\SocketInterface;
++use React\EventLoop\Loop;
+ use Throwable;
+ use Webrtc\Exception\InvalidArgumentException;
+ use Webrtc\Exception\RuntimeException;
+@@ -23,7 +24,6 @@ use Webrtc\STUN\Enum\MessageClass;
+ use Webrtc\STUN\Message\Message;
+ use Webrtc\STUN\Message\MessageInterface;
+ use Webrtc\STUN\Trait\Request;
+-use function React\Async\await;
+ 
+ /**
+  * STUN (Session Traversal Utilities for NAT) Protocol Implementation
+@@ -172,16 +172,25 @@ class Stun extends Datagram implements StunInterface
+         ?LoggerInterface $logger = null,
+         ?array $portRange = null
+     ): StunInterface {
+-        $factory = new Factory();
+         $port = 0;
+         if ($portRange) {
+             $port = self::getRandomPort($portRange, $host);
+         }
+ 
++        // Binding a UDP socket to a literal address needs no name resolution, so it is done directly
++        // instead of through the promise based factory. await() would run the event loop nested
++        // inside whatever callback triggered gathering, and a nested run can consume the outer
++        // driver's pending stop callback - which aborts the await before the socket ever resolves.
++        $address = "udp://$host:$port";
++        $stream = @stream_socket_server($address, $errno, $errstr, STREAM_SERVER_BIND);
++        if ($stream === false) {
++            throw new RuntimeException(sprintf("Could not bind to %s - %s", "$host:$port", $errstr), $errno);
++        }
++
+         try {
+-            $socket = await($factory->createServer("$host:$port"));
+-            return new static($receiver, $socket, $logger);
++            return new static($receiver, new Socket(Loop::get(), $stream), $logger);
+         } catch (Throwable $e) {
++            @fclose($stream);
+             throw new RuntimeException(
+                 sprintf("Could not bind to %s - %s", "$host:$port", $e->getMessage()),
+                 $e->getCode(),
