@@ -82,10 +82,20 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
     /** @var DtlsRole The role (client/server) in the DTLS handshake */
     private DtlsRole $role = DtlsRole::Auto;
 
+    /** @var int Most records held from before start(); a handshake flight is only a few */
+    private const MAX_EARLY_RECORDS = 32;
+
+    /** @var string[] Records that arrived before the connection existed */
+    private array $earlyRecords = [];
+
     public function __construct(private readonly RTCIceTransportInterface $transport, private readonly RTCCertificate $certificate)
     {
         $this->reportTransport = new RTCTransportStats("transport_" . spl_object_id($this));
         $this->forwardEvents2Methods($transport, ['close' => 'handleDisconnectingError', 'error' => 'handleDisconnectingError']);
+        // Records can arrive before start() has built the connection - whichever peer finishes ICE
+        // first sends its flight immediately. Listening from construction and holding those records
+        // until the connection exists avoids losing the flight and waiting out a retransmit timeout.
+        $this->forwardEvents2Methods($transport, ['data' => 'onReceivedData']);
     }
 
     /**
@@ -170,9 +180,6 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
             $established->resolve(true);
         });
 
-        // records arrive on the ICE transport from now on
-        $this->forwardEvents2Methods($this->transport, ['data' => 'onReceivedData']);
-
         // a lost flight is only recovered if something keeps nudging the connection
         $this->retransmitTimer = Loop::addPeriodicTimer(self::RETRANSMIT_INTERVAL, function (): void {
             $this->connection?->handleTimeout();
@@ -180,6 +187,13 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
 
         try {
             $this->connection->start();
+
+            $buffered = $this->earlyRecords;
+            $this->earlyRecords = [];
+            foreach ($buffered as $record) {
+                $this->onReceivedData($record);
+            }
+
             await($this->withTimeout($established->promise()));
         } catch (Throwable $e) {
             $this->cancelRetransmits();
@@ -332,8 +346,17 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
     {
         $this->reportTransport->handleReceived($data);
 
+        if ($this->connection === null) {
+            // the peer's first flight, ahead of our own start() - hold it rather than drop it
+            if (count($this->earlyRecords) < self::MAX_EARLY_RECORDS) {
+                $this->earlyRecords[] = $data;
+            }
+
+            return;
+        }
+
         try {
-            $this->connection?->handle($data);
+            $this->connection->handle($data);
         } catch (NativeDtlsException $e) {
             $this->logger?->debug(sprintf("DTLS: %s", $e->getMessage()));
         }
