@@ -47,7 +47,6 @@ use Webrtc\SCTP\Param\StreamResetResponseParam;
 use Webrtc\SCTP\Trait\DataChannel;
 use Webrtc\SDP\SctpParameter\RTCSctpCapabilities;
 use Webrtc\Stats\enum\TLSState;
-use function React\Async\async;
 
 /**
  * Class RTCSctpTransport
@@ -346,9 +345,13 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         // ordering against queued data has to be preserved either way.
         if (!$chunk instanceof DataChunk) {
             $this->flushChunks();
-            async(function () use ($chunk) {
+
+            try {
                 $this->transport->sendData($this->encodeChunk($chunk));
-            })();
+            } catch (Throwable $e) {
+                $this->log("Dropping an SCTP control chunk, the DTLS transport is not available: " . $e->getMessage());
+            }
+
             return;
         }
 
