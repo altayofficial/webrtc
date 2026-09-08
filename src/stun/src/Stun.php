@@ -14,7 +14,6 @@ namespace Webrtc\STUN;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Random\RandomException;
-use React\Datagram\Socket;
 use React\Datagram\SocketInterface;
 use React\EventLoop\Loop;
 use Throwable;
@@ -210,7 +209,7 @@ class Stun extends Datagram implements StunInterface
         }
 
         try {
-            return new static($receiver, new Socket(Loop::get(), $stream), $logger);
+            return new static($receiver, new DrainingSocket(Loop::get(), $stream), $logger);
         } catch (Throwable $e) {
             @fclose($stream);
             throw new RuntimeException(

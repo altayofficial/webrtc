@@ -1,0 +1,122 @@
+<?php
+
+/**
+ * This file is part of the PHP WebRTC package.
+ *
+ * (c) Amin Yazdanpanah <https://www.aminyazdanpanah.com/#contact>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+namespace Webrtc\STUN;
+
+use React\Datagram\Socket;
+use React\EventLoop\LoopInterface;
+use function function_exists;
+use function socket_import_stream;
+use function socket_set_option;
+use function stream_set_blocking;
+use function stream_socket_recvfrom;
+use function strpos;
+use function strrpos;
+use function substr;
+
+/**
+ * A datagram socket that empties its receive buffer before handing the event loop back.
+ *
+ * The loop reports a socket as readable once per turn, and the base class reads a single datagram
+ * per event, so a connection can never take in more than one packet per turn of whatever drives the
+ * loop. A message split across a hundred SCTP packets then arrives at the driving loop's tick rate -
+ * at 200 ticks a second that is half a second for one 128 KB body, in each direction.
+ */
+class DrainingSocket extends Socket
+{
+    /** @var int Datagrams read per readable event. The cap keeps one busy socket from starving the rest. */
+    private const MAX_DRAIN = 64;
+
+    /** @var int Receive and send buffer asked of the kernel. The default holds a couple of dozen datagrams. */
+    private const BUFFER_SIZE = 4 * 1024 * 1024;
+
+    /**
+     * @var mixed The imported handle, held for as long as this socket lives. It shares the stream's
+     *            descriptor, so letting it go early would close the socket underneath us.
+     */
+    private $handle = null;
+
+    /**
+     * @param resource $socket
+     * @param mixed $buffer
+     */
+    public function __construct(LoopInterface $loop, $socket, $buffer = null)
+    {
+        // Reading past the first datagram means reading a socket the loop has not called readable,
+        // which on a blocking stream waits forever. Nothing else reads these sockets, so switching
+        // them costs nothing.
+        stream_set_blocking($socket, false);
+        $this->widenBuffers($socket);
+
+        parent::__construct($loop, $socket, $buffer ?? new ImmediateBuffer($loop, $socket));
+    }
+
+    /**
+     * Asks the kernel for room to hold a burst. A fan-out or a fragmented body fills the default
+     * receive buffer within one turn of the loop, and a datagram dropped there costs a whole
+     * retransmission round trip.
+     *
+     * @param resource $socket
+     */
+    private function widenBuffers($socket): void
+    {
+        if (!function_exists("socket_import_stream")) {
+            return;
+        }
+
+        $handle = @socket_import_stream($socket);
+        if ($handle === false || $handle === null) {
+            return;
+        }
+
+        @socket_set_option($handle, SOL_SOCKET, SO_RCVBUF, self::BUFFER_SIZE);
+        @socket_set_option($handle, SOL_SOCKET, SO_SNDBUF, self::BUFFER_SIZE);
+
+        $this->handle = $handle;
+    }
+
+    public function onReceive()
+    {
+        for ($i = 0; $i < self::MAX_DRAIN; $i++) {
+            if ($this->socket === false) {
+                return;
+            }
+
+            $peer = null;
+            $data = @stream_socket_recvfrom($this->socket, $this->bufferSize, 0, $peer);
+            if ($data === false) {
+                // the buffer is empty, or the remote side rejected the last datagram we sent - either
+                // way there is nothing here to hand on
+                return;
+            }
+
+            $this->emit('message', [$data, $this->normaliseAddress($peer), $this]);
+        }
+    }
+
+    /**
+     * The base class keeps its own copy of this to itself.
+     */
+    private function normaliseAddress(?string $address): ?string
+    {
+        if ($address === null || $address === '') {
+            return null;
+        }
+
+        // an IPv6 address with several colons and no brackets, as PHP below 7.3 reports it
+        $pos = strrpos($address, ':');
+        if ($pos !== false && strpos($address, ':') < $pos && substr($address, 0, 1) !== '[') {
+            $address = '[' . substr($address, 0, $pos) . ']:' . substr($address, $pos + 1);
+        }
+
+        return $address;
+    }
+}
