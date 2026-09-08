@@ -22,6 +22,7 @@ use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\Exception\RuntimeException;
 use Webrtc\STUN\Enum\MessageClass;
 use Webrtc\STUN\Message\Message;
+use Webrtc\STUN\Message\MessageIntegrity;
 use Webrtc\STUN\Message\MessageInterface;
 use Webrtc\STUN\Trait\Request;
 
@@ -69,11 +70,32 @@ class Stun extends Datagram implements StunInterface
      */
     protected function onReceived(string $data, string $peerAddress): void
     {
+        // RFC 7983 demultiplexing: only a first byte below 4 can belong to STUN, everything above
+        // is DTLS or media. On an established connection that is every single packet, and handing
+        // those to the decoder meant a full parse and a thrown exception each time - more expensive
+        // than the record they were carrying.
+        if (!self::looksLikeStun($data)) {
+            $this->receiver->onDataReceived($data, $this->getCandidate()->getComponentId());
+
+            return;
+        }
+
         if ($message = $this->decodeMessage($data)) {
             $this->handleMessage($message, $peerAddress, $data);
         } else {
             $this->receiver->onDataReceived($data, $this->getCandidate()->getComponentId());
         }
+    }
+
+    /**
+     * Whether the datagram can be a STUN message at all: long enough for the header, the two zero
+     * bits every STUN message type starts with, and the magic cookie.
+     */
+    private static function looksLikeStun(string $data): bool
+    {
+        return strlen($data) >= MessageIntegrity::HEADER_LENGTH
+            && (ord($data[0]) & 0xC0) === 0
+            && substr($data, 4, 4) === "\x21\x12\xA4\x42";
     }
 
     /**
