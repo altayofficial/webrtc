@@ -1,0 +1,92 @@
+diff --git a/src/sctp/src/RTCSctpTransport.php b/src/sctp/src/RTCSctpTransport.php
+index 3444fd3..d343f60 100644
+--- a/src/sctp/src/RTCSctpTransport.php
++++ b/src/sctp/src/RTCSctpTransport.php
+@@ -92,6 +92,9 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+     private int $localTsn;
+     private bool $sackNeeded = false;
+ 
++    /** @var int Nesting depth of packet handling, during which nothing is flushed on its own */
++    private int $deferFlush = 0;
++
+     /** @var float Longest a SACK is held back when there is nothing else to acknowledge it with */
+     private const DELAYED_SACK_TIMEOUT = 0.02;
+ 
+@@ -340,10 +343,10 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+             $this->log(sprintf(" Sent chunk %s", $chunk));
+         }
+ 
+-        // Only DATA chunks are bundled. Control chunks are left alone because some of them - INIT,
+-        // INIT ACK and SHUTDOWN COMPLETE - may not share a packet with anything else at all, and
+-        // ordering against queued data has to be preserved either way.
+-        if (!$chunk instanceof DataChunk) {
++        // DATA and SACK are bundled. The remaining control chunks are left alone because some of
++        // them - INIT, INIT ACK and SHUTDOWN COMPLETE - may not share a packet with anything else
++        // at all, and ordering against queued data has to be preserved either way.
++        if (!$chunk instanceof DataChunk && !$chunk instanceof SackChunk) {
+             $this->flushChunks();
+ 
+             try {
+@@ -357,7 +360,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+ 
+         $encoded = $chunk->encode();
+         if ($this->pendingChunkBytes > 0 && $this->pendingChunkBytes + strlen($encoded) > self::MAX_BUNDLED_PACKET_SIZE) {
+-            $this->flushChunks();
++            // a full packet goes out even mid handling, otherwise the bundle would grow past the MTU
++            $this->flushChunks(true);
+         }
+         $this->pendingChunks[] = $encoded;
+         $this->pendingChunkBytes += strlen($encoded);
+@@ -366,9 +370,9 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+     /**
+      * Sends everything queued by sendChunk() as a single SCTP packet.
+      */
+-    public function flushChunks(): void
++    public function flushChunks(bool $force = false): void
+     {
+-        if ($this->pendingChunks === []) {
++        if ($this->pendingChunks === [] || (!$force && $this->deferFlush > 0)) {
+             return;
+         }
+         $chunks = $this->pendingChunks;
+@@ -989,16 +993,26 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+             return;
+         }
+ 
+-        // Handle chunks
+-        foreach ($chunks as $chunk) {
+-            $this->receiveChunk($chunk);
++        // Handle chunks. Whatever the application sends back from inside these callbacks stays in
++        // the bundle rather than going out on its own, so the acknowledgement below can travel in
++        // the same packet as the reply. For request/response traffic - which is what a game server
++        // does all day - that is one datagram, one DTLS record and one event loop turn per message
++        // instead of two.
++        $this->deferFlush++;
++        try {
++            foreach ($chunks as $chunk) {
++                $this->receiveChunk($chunk);
++            }
++        } finally {
++            $this->deferFlush--;
+         }
+ 
+         // RFC 4960 6.2: acknowledge every second packet rather than every one. Acking each packet
+         // doubled the packet count on the association, and every extra packet costs a DTLS record,
+-        // a datagram and a pass through the event loop on both ends.
++        // a datagram and a pass through the event loop on both ends. When there is already a reply
++        // waiting to go out, the SACK rides along with it and costs nothing at all.
+         if ($this->sackNeeded) {
+-            if (++$this->packetsSinceSack >= 2) {
++            if ($this->pendingChunks !== [] || ++$this->packetsSinceSack >= 2) {
+                 $this->sendSack();
+             } elseif ($this->delayedSackTimer === null) {
+                 $this->delayedSackTimer = $this->loop->addTimer(self::DELAYED_SACK_TIMEOUT, function (): void {
+@@ -1009,6 +1023,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
+                 });
+             }
+         }
++
++        $this->flushChunks();
+     }
+ 
+     /**
