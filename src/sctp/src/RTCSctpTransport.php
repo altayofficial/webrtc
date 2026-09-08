@@ -299,11 +299,16 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      */
     public function stop(): void
     {
+        // The abort has to go out while the association is still up. Setting the state first made
+        // the condition below permanently false, so the peer was never told that the association
+        // had gone away: it kept the connection, its data channels and its ICE sockets until
+        // something else timed them out.
+        if ($this->state !== State::CLOSED) {
+            $this->sendChunk(new AbortChunk());
+        }
+
         $this->transport->removeSctpReceiver($this);
         $this->setState(State::CLOSED);
-        if ($this->state != State::CLOSED) {
-            $this->sendChunk(new AbortChunk()); // Abort the association.
-        }
     }
 
 
