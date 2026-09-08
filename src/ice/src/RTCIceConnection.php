@@ -186,6 +186,9 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
      */
     private ?array $nat1to1 = null;
 
+    /** @var string[]|null Local addresses host candidates are limited to */
+    private ?array $interfaces = null;
+
     /**
      * Constructor - Creates a new ICE connection
      *
@@ -451,7 +454,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
      */
     private function getHostCandidates(int $componentId): array
     {
-        $addresses = $this->nat1to1 ?? $this->getHostAddresses($this->useIPv4, $this->useIPv6);
+        $addresses = $this->nat1to1 ?? $this->filterInterfaces($this->getHostAddresses($this->useIPv4, $this->useIPv6));
         $candidates = [];
 
         foreach ($addresses as $address) {
@@ -2112,5 +2115,42 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     public function setNat1to1(?array $nat1to1): void
     {
         $this->nat1to1 = $nat1to1;
+    }
+
+    /**
+     * @param string[]|null $interfaces
+     */
+    public function setInterfaces(?array $interfaces): void
+    {
+        $this->interfaces = $interfaces;
+    }
+
+    /**
+     * Keeps only the addresses that were asked for. An address that was asked for but is not on the
+     * machine is left out rather than bound blindly, and if that empties the list the connection
+     * falls back to every address - no candidates at all would mean no connection at all.
+     *
+     * @param string[] $addresses
+     * @return string[]
+     */
+    private function filterInterfaces(array $addresses): array
+    {
+        if ($this->interfaces === null) {
+            return $addresses;
+        }
+
+        $wanted = [];
+        foreach ($this->interfaces as $address) {
+            $wanted[trim($address, "[]")] = true;
+        }
+
+        $filtered = [];
+        foreach ($addresses as $address) {
+            if (isset($wanted[trim($address, "[]")])) {
+                $filtered[] = $address;
+            }
+        }
+
+        return $filtered === [] ? $addresses : $filtered;
     }
 }

@@ -1,0 +1,122 @@
+diff --git a/src/ice/src/RTCICESetting.php b/src/ice/src/RTCICESetting.php
+index 60e002c..8a8d417 100644
+--- a/src/ice/src/RTCICESetting.php
++++ b/src/ice/src/RTCICESetting.php
+@@ -11,6 +11,9 @@ class RTCICESetting
+     private ?array $icePortRange = null;
+     private TransportPolicyType $transportPolicy = TransportPolicyType::ALL;
+     private ?array $nat1to1 = null;
++
++    /** @var string[]|null Local addresses to gather host candidates on, or null for every one of them */
++    private ?array $interfaces = null;
+     private bool $iceLite = false;
+     // it will be changed for only testing purpose
+     private IceRole $iceRole = IceRole::Controlling;
+@@ -48,6 +51,29 @@ class RTCICESetting
+         return $this->nat1to1;
+     }
+ 
++    /**
++     * The local addresses host candidates may be gathered on.
++     *
++     * Every address costs a socket per connection, and a machine usually has several the peer can
++     * never reach - a container bridge, a VPN, a second NIC on another segment. Naming the ones that
++     * matter keeps the descriptor count, the size of the SDP and the number of connectivity checks
++     * down to what is actually useful.
++     *
++     * @return string[]|null
++     */
++    public function getInterfaces(): ?array
++    {
++        return $this->interfaces;
++    }
++
++    /**
++     * @param string[]|null $interfaces null gathers on every local address
++     */
++    public function setInterfaces(?array $interfaces): void
++    {
++        $this->interfaces = $interfaces === null || $interfaces === [] ? null : array_values($interfaces);
++    }
++
+     public function setNat1to1(?array $nat1to1): void
+     {
+         $this->nat1to1 = $nat1to1;
+diff --git a/src/ice/src/RTCIceConnection.php b/src/ice/src/RTCIceConnection.php
+index d789922..6abad36 100644
+--- a/src/ice/src/RTCIceConnection.php
++++ b/src/ice/src/RTCIceConnection.php
+@@ -186,6 +186,9 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
+      */
+     private ?array $nat1to1 = null;
+ 
++    /** @var string[]|null Local addresses host candidates are limited to */
++    private ?array $interfaces = null;
++
+     /**
+      * Constructor - Creates a new ICE connection
+      *
+@@ -451,7 +454,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
+      */
+     private function getHostCandidates(int $componentId): array
+     {
+-        $addresses = $this->nat1to1 ?? $this->getHostAddresses($this->useIPv4, $this->useIPv6);
++        $addresses = $this->nat1to1 ?? $this->filterInterfaces($this->getHostAddresses($this->useIPv4, $this->useIPv6));
+         $candidates = [];
+ 
+         foreach ($addresses as $address) {
+@@ -2113,4 +2116,41 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
+     {
+         $this->nat1to1 = $nat1to1;
+     }
++
++    /**
++     * @param string[]|null $interfaces
++     */
++    public function setInterfaces(?array $interfaces): void
++    {
++        $this->interfaces = $interfaces;
++    }
++
++    /**
++     * Keeps only the addresses that were asked for. An address that was asked for but is not on the
++     * machine is left out rather than bound blindly, and if that empties the list the connection
++     * falls back to every address - no candidates at all would mean no connection at all.
++     *
++     * @param string[] $addresses
++     * @return string[]
++     */
++    private function filterInterfaces(array $addresses): array
++    {
++        if ($this->interfaces === null) {
++            return $addresses;
++        }
++
++        $wanted = [];
++        foreach ($this->interfaces as $address) {
++            $wanted[trim($address, "[]")] = true;
++        }
++
++        $filtered = [];
++        foreach ($addresses as $address) {
++            if (isset($wanted[trim($address, "[]")])) {
++                $filtered[] = $address;
++            }
++        }
++
++        return $filtered === [] ? $addresses : $filtered;
++    }
+ }
+\ No newline at end of file
+diff --git a/src/ice/src/RTCIceGatherer.php b/src/ice/src/RTCIceGatherer.php
+index 16cba93..e3fbce2 100644
+--- a/src/ice/src/RTCIceGatherer.php
++++ b/src/ice/src/RTCIceGatherer.php
+@@ -56,6 +56,7 @@ class RTCIceGatherer extends EventEmitter implements RTCIceGathererInterface
+         $this->iceConnection->setTransportPolicy($setting->getTransportPolicy());
+         $this->iceConnection->setRemoteIsLite($setting->isIceLite());
+         $this->iceConnection->setNat1to1($setting->getNat1to1());
++        $this->iceConnection->setInterfaces($setting->getInterfaces());
+ 
+         if ($logger) {
+             $this->iceConnection->setLogger($logger);
