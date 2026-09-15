@@ -182,7 +182,13 @@ class RTCDtlsTransport extends EventEmitter implements RTCSctpDtlsTransportInter
 
         // a lost flight is only recovered if something keeps nudging the connection
         $this->retransmitTimer = Loop::addPeriodicTimer(self::RETRANSMIT_INTERVAL, function (): void {
-            $this->connection?->handleTimeout();
+            try {
+                $this->connection?->handleTimeout();
+            } catch (Throwable $e) {
+                // This timer belongs to one connection but runs on the loop every connection shares,
+                // so whatever goes wrong in here has to stop here
+                $this->logger?->debug(sprintf("DTLS: retransmit failed: %s", $e->getMessage()));
+            }
         });
 
         try {

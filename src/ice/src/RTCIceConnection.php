@@ -1683,21 +1683,27 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     /**
      * Sends application data over the nominated candidate pair for a specific component.
      *
+     * A datagram for a component with no nominated pair is dropped, the same as one the network
+     * loses.
+     *
      * @param string $data The data to send.
      * @param int $componentId The component ID (default is 1).
      *
      * @return void
-     * @throws RuntimeException If no nominated pair exists for the given component.
-     *
      */
     public function sendData(string $data, int $componentId = 1): void
     {
-        if (isset($this->nominated[$componentId])) {
-            $pair = $this->nominated[$componentId];
-            $pair->getProtocol()->send($data, implode(":", $pair->getRemoteAddress()));
-        } else {
-            throw new RuntimeException("No Connection");
+        $pair = $this->nominated[$componentId] ?? null;
+        if ($pair === null) {
+            // No pair is nominated before the checks finish, and none is left once the connection is
+            // torn down. Either way this is a packet path with nowhere to put the packet, which is
+            // the same thing as a packet the network dropped: DTLS and SCTP both retransmit, and the
+            // timers that drive them run on a loop shared with every other connection, so throwing
+            // here took that loop down with it.
+            $this->logger?->debug("Dropped a datagram for component $componentId, no candidate pair is nominated");
+            return;
         }
+        $pair->getProtocol()->send($data, implode(":", $pair->getRemoteAddress()));
     }
 
     /**
