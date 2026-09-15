@@ -1850,17 +1850,11 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
         $responseMessage->setTransactionId($message->getTransactionId());
         $responseMessage->addMessageIntegrity($this->localPassword);
 
-        async(function () use ($protocol, $responseMessage, $address) {
-            try {
-                $response = await($protocol->request($responseMessage, $address));
-                $this->logger?->info("Binding response sent successfully", [
-                    "Message" => $response[0]->humanReadable(),
-                    "Address" => $response[1]
-                ]);
-            } catch (TransactionExceptionInterface $e) {
-                $this->logger?->error("Failed to send binding response", ["Error" => $e->getMessage()]);
-            }
-        })();
+        // A response answers a transaction, it does not open one. Sending it through request() left
+        // a transaction waiting for a reply that by definition never comes, so every binding request
+        // a peer sent cost a timer and half a second later an error about a message that had in fact
+        // gone out perfectly well.
+        $protocol->sendMessage($responseMessage, $address);
     }
 
     /**

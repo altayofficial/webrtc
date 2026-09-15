@@ -125,7 +125,7 @@ class Stun extends Datagram implements StunInterface
      */
     private function handleMessage(MessageInterface $message, string $address, string $data): void
     {
-        $this->logger?->info(
+        $this->logger?->debug(
             "A new STUN message has been received",
             [
                 "Message" => $message->humanReadable(),

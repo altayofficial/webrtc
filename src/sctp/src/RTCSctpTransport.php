@@ -1430,7 +1430,9 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
      */
     public function receiveAbortChunk(AbortChunk $chunk): void
     {
-        $this->log(" The connection was terminated by the remote party.");
+        // Worth more than a debug line: this is the peer saying it threw the association away, and
+        // it is the only account anyone gets of why the connection went with it
+        $this->logger?->warning("[RTC_SCTP]: The association was aborted by the remote party");
         $this->setState(State::CLOSED);
     }
 
