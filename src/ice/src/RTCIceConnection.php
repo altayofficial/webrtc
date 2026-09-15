@@ -861,17 +861,19 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
      */
     private function sortCheckList(): void
     {
-        $pairPriority = function (RTCIceCandidatePair $pair) {
-            $G = $this->isControllingRole() ? $pair->getLocalCandidate()->getPriority() : $pair->getRemoteCandidate()->getPriority();
-            $D = $this->isControllingRole() ? $pair->getRemoteCandidate()->getPriority() : $pair->getLocalCandidate()->getPriority();
+        // Highest priority first, which is the order the checks are meant to run in
+        usort($this->checkList, fn(RTCIceCandidatePair $a, RTCIceCandidatePair $b) => $this->pairPriority($b) <=> $this->pairPriority($a));
+    }
 
-            return -((1 << 32) * min($G, $D) + 2 * max($G, $D) + ($G > $D ? 1 : 0));
-        };
+    /**
+     * The priority of a pair, as RFC 8445 section 6.1.2.3 defines it.
+     */
+    private function pairPriority(RTCIceCandidatePair $pair): int
+    {
+        $G = $this->isControllingRole() ? $pair->getLocalCandidate()->getPriority() : $pair->getRemoteCandidate()->getPriority();
+        $D = $this->isControllingRole() ? $pair->getRemoteCandidate()->getPriority() : $pair->getLocalCandidate()->getPriority();
 
-        // Sort the candidate pairs using the priority function
-        usort($this->checkList, function ($a, $b) use ($pairPriority) {
-            return $pairPriority($a) <=> $pairPriority($b);
-        });
+        return (1 << 32) * min($G, $D) + 2 * max($G, $D) + ($G > $D ? 1 : 0);
     }
 
     /**
@@ -1436,7 +1438,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
      */
     private function handleSuccessfulPair(RTCIceCandidatePair $pair): bool
     {
-        if ($pair->isNominated()) {
+        if ($pair->isNominated() && $this->isBetterThanNominated($pair)) {
             $this->nominated[$pair->getComponentId()] = $pair;
             $this->failOtherPairsInComponent($pair);
         }
@@ -1450,6 +1452,29 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
         $this->updateFrozenPairs($pair);
 
         return false;
+    }
+
+    /**
+     * Whether a nominated pair should take the component over from the one carrying it.
+     *
+     * A peer that nominates aggressively puts the flag on every check it sends, so pairs keep
+     * arriving here long after one of them is carrying traffic. RFC 8445 section 8.1.1 picks the
+     * highest priority nominated pair; taking whichever answered last instead moves the media onto
+     * another interface mid-session, and on a host with several of them - a second NIC, a VM
+     * adapter, a VPN - that is a path the peer may not be able to answer on at all.
+     */
+    private function isBetterThanNominated(RTCIceCandidatePair $pair): bool
+    {
+        $current = $this->nominated[$pair->getComponentId()] ?? null;
+        if ($current === null || $current === $pair) {
+            return true;
+        }
+        if ($current->getState() !== RTCIceCandidatePairStats::SUCCEEDED) {
+            // whatever was carrying the component has stopped working, so anything that works wins
+            return true;
+        }
+
+        return $this->pairPriority($pair) > $this->pairPriority($current);
     }
 
     /**

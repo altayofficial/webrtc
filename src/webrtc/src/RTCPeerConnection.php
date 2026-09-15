@@ -347,6 +347,12 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     public function setLogger(LoggerInterface $logger): void
     {
         $this->logger = $logger;
+
+        // transports built before this point would otherwise keep quiet for the rest of their lives
+        $this->sctp?->setLogger($logger);
+        foreach ($this->dtlsTransports as $dtlsTransport) {
+            $dtlsTransport->setLogger($logger);
+        }
     }
 
     /**
@@ -517,6 +523,10 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     private function createSctpTransport(): void
     {
         $this->sctp = new RTCSctpTransport($this->createDtlsTransport());
+        // without this the association's own account of itself - the chunks it sends, an abort from
+        // the far end, the state it ends up in - goes nowhere, which is most of what there is to
+        // know when data stops flowing over a connection that looks established
+        $this->sctp->setLogger($this->logger);
 
         $this->sctp->on("datachannel", function ($dataChannel): void {
             $this->emit("datachannel", [$dataChannel]);
@@ -541,6 +551,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
 
         // create DTLS transport
         $dtlsTransport = new RTCDtlsTransport($iceTransport, $this->certificates[0]);
+        $dtlsTransport->setLogger($this->logger);
         $dtlsTransport->on("statechange", fn() => $this->updateConnectionState());
         $this->dtlsTransports[spl_object_id($dtlsTransport)] = $dtlsTransport;
 
