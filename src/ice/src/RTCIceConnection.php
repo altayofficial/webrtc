@@ -648,20 +648,41 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
             throw new InvalidArgumentException("Unable to add remote candidate after the end-of-candidates stage.");
         }
 
-        // Resolve mDNS candidate
+        // Resolve mDNS candidate. The answer comes over multicast from a host that may not be
+        // listening at all, so the query runs on its own: waiting for it here would hold up whoever
+        // called this - and with them every other connection sharing the loop - for the full query
+        // timeout, once per candidate.
         if ($this->isMdnsDomain($remoteCandidate->getHost())) {
-            if ($ip = $this->resolveMdns($remoteCandidate->getHost())) {
+            async(function () use ($remoteCandidate): void {
+                $ip = $this->resolveMdns($remoteCandidate->getHost());
+                if ($ip === false) {
+                    $this->logger?->error("Couldn't resolve the remote host", ["RemoteHost" => $remoteCandidate->getHost()]);
+                    return;
+                }
                 $remoteCandidate->setHost($ip);
-            } else {
-                $this->logger?->error("Couldn't resolve the remote host", ["RemoteHost" => $remoteCandidate->getHost()]);
-                return;
-            }
+                $this->addResolvedCandidate($remoteCandidate);
+            })();
+
+            return;
         }
 
-        // Validate the remote candidate add it
-        if ($this->validateRemoteCandidate($remoteCandidate)) {
-            $this->remoteCandidates [] = $remoteCandidate;
+        $this->addResolvedCandidate($remoteCandidate);
+    }
+
+    /**
+     * Validates a candidate whose address is known and puts it on the check list.
+     */
+    private function addResolvedCandidate(RTCIceCandidate $remoteCandidate): void
+    {
+        if (!$this->validateRemoteCandidate($remoteCandidate)) {
+            return;
+        }
+
+        $this->remoteCandidates [] = $remoteCandidate;
+        try {
             $this->createCheckList($remoteCandidate);
+        } catch (Throwable $e) {
+            $this->logger?->error(sprintf("Could not check the remote candidate: %s", $e->getMessage()));
         }
     }
 
