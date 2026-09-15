@@ -1003,7 +1003,15 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     {
         $remoteCandidate = $this->findOrCreateRemoteCandidate($message, $address, $protocol->getCandidate()->getComponentId());
         $pair = $this->findPair($protocol, $remoteCandidate) ?? $this->createNewCandidatePair($protocol, $remoteCandidate);
-        if (in_array($pair->getState(), [RTCIceCandidatePairStats::WAITING, RTCIceCandidatePairStats::FAILED], true)) {
+
+        // A peer that keeps probing every address it holds arrives here over and over, and each
+        // request used to start a check of our own. Once a pair is carrying the connection there is
+        // nothing left to look for: chasing the rest means a transaction per dead address, each one
+        // held open until it times out, for as long as the peer keeps probing. The pair in use is
+        // still rechecked, since a triggered check for it is how a path that broke comes back.
+        $carrying = $this->nominated[$pair->getComponentId()] ?? null;
+        $worthChecking = !$this->checkListDone || $pair === $carrying;
+        if ($worthChecking && in_array($pair->getState(), [RTCIceCandidatePairStats::WAITING, RTCIceCandidatePairStats::FAILED], true)) {
             $this->startCheckBinding($pair);
         }
 
