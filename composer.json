@@ -36,12 +36,6 @@
         "quasarstream/turn": "v1.0.0",
         "quasarstream/webrtc": "v1.0.3"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/altayofficial/dtls"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Webrtc\\DTLS\\": "src/dtls/src/",
