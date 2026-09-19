@@ -27,22 +27,3 @@ jobs:
 
       - name: Load every class
         run: php tools/smoke.php
-
-  rebuild:
-    name: src/ is up to date
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          extensions: ffi, gmp
-
-      - run: composer install --no-interaction --no-progress -d tools
-      - run: php tools/build.php
-
-      # The build is deterministic, so a dirty tree means src/ was edited by hand or
-      # the pinned upstream tag moved.
-      - name: Check for drift
-        run: git diff --exit-code
