@@ -240,7 +240,7 @@ class Stun extends Datagram implements StunInterface
         shuffle($ports);
 
         foreach ($ports as $port) {
-            $socket = @stream_socket_server("udp://$host:$port", $errno, $errstr);
+            $socket = @stream_socket_server("udp://$host:$port", $errno, $errstr, STREAM_SERVER_BIND);
             if ($socket) {
                 fclose($socket);
                 return $port;
