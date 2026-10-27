@@ -77,8 +77,11 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     /** @var int Maximum number of binding retry attempts */
     private const RETRY_BINDING_MAX = 10;
 
-    /** @var int Maximum number of consent failures before closing */
-    private const CONSENT_FAILURES = 6;
+    /** @var int Seconds without a consent response before the connection is closed (RFC 7675 section 5.1) */
+    private const CONSENT_EXPIRY = 30;
+
+    /** @var int Retransmissions per consent check, so one lost datagram or a slow peer doesn't count as a failure */
+    private const CONSENT_RETRANSMISSIONS = 3;
 
     /** @var int Interval between consent checks in seconds */
     private const CONSENT_INTERVAL = 5;
@@ -1615,8 +1618,8 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
      * Periodically performs consent freshness checks as per RFC 7675.
      *
      * Sends periodic STUN binding requests on all nominated candidate pairs to confirm
-     * that the remote peer still consents to receive traffic. If repeated failures occur,
-     * the connection is closed.
+     * that the remote peer still consents to receive traffic. Each check is retransmitted, and
+     * the connection is closed once no check got an answer for CONSENT_EXPIRY seconds.
      *
      * @see https://www.rfc-editor.org/rfc/rfc7675
      *
@@ -1625,22 +1628,25 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     public function periodicConsentCheck(): void
     {
         $interval = $this->calculateConsentInterval();
-        $failureCount = 0;
+        $lastConsentAt = hrtime(true);
 
-        $this->queryConsentTimer = $this->loop->addPeriodicTimer($interval, function () use (&$failureCount): void {
+        $this->queryConsentTimer = $this->loop->addPeriodicTimer($interval, function () use (&$lastConsentAt): void {
+            // hmm, a single answer is enough to keep consent alive, so only a peer that stayed
+            // silent for the whole window gets dropped, slow or lossy links survive
+            if ((hrtime(true) - $lastConsentAt) / 1e9 >= self::CONSENT_EXPIRY) {
+                $this->logger?->error("Consent to send expired, no response for " . self::CONSENT_EXPIRY . " seconds");
+                $this->close();
+                return;
+            }
+
             foreach ($this->nominated as $pair) {
                 $message = $this->buildBindingMessage($pair, false);
                 $remoteAddress = implode(":", $pair->getRemoteAddress());
 
-                $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword)->then(function () use (&$failureCount) {
-                    $failureCount = 0; // Reset failures on success
-                })->catch(function (Throwable $e) use (&$failureCount, $pair) {
-                    $failureCount++;
+                $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword, self::CONSENT_RETRANSMISSIONS)->then(function () use (&$lastConsentAt) {
+                    $lastConsentAt = hrtime(true);
+                })->catch(function (Throwable $e) use ($pair) {
                     $this->logger?->warning("Consent check failed for pair: $pair. Error: {$e->getMessage()}");
-                    if ($failureCount >= self::CONSENT_FAILURES) {
-                        $this->logger?->error("Consent to send expired after $failureCount failures");
-                        $this->close();
-                    }
                 });
             }
         });
