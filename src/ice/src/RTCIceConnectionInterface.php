@@ -93,4 +93,11 @@ interface RTCIceConnectionInterface
     public function setIceRole(IceRole $iceRole): void;
 
     public function isRemoteCandidatesEnd(): bool;
+
+    /**
+     * The candidate pairs ICE settled on, one per component. Empty until a pair is nominated.
+     *
+     * @return RTCIceCandidatePair[]
+     */
+    public function getNominated(): array;
 }
