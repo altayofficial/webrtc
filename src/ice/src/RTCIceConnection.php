@@ -44,6 +44,7 @@ use Webrtc\STUN\Message\MessageInterface;
 use Webrtc\STUN\ReceiverInterface;
 use Webrtc\STUN\Stun;
 use Webrtc\STUN\StunInterface;
+use Webrtc\STUN\UdpMux;
 use Webrtc\TURN\Turn;
 use Webrtc\TURN\TurnInterface;
 use function React\Async\async;
@@ -179,6 +180,9 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
 
     /** @var ?array Range of ports that host candidates allow */
     private ?array $icePortRange = null;
+
+    /** @var ?UdpMux Shared port host candidates are gathered on, instead of one of their own */
+    private ?UdpMux $udpMux = null;
 
     /**
      * @var ?array If set, this will result in all host candidates (which normally have a private IP address)
@@ -586,6 +590,9 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     private function getStun(string $address): StunInterface|bool
     {
         try {
+            if ($this->udpMux !== null) {
+                return new Stun($this, $this->udpMux->open($address, fn(): string => $this->localUsername), $this->logger);
+            }
             return Stun::create($this, $address, $this->logger, $this->icePortRange);
         } catch (Throwable) {
             return false;
@@ -2154,6 +2161,11 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
 
     {
         $this->iceRole = $iceRole;
+    }
+
+    public function setUdpMux(?UdpMux $udpMux): void
+    {
+        $this->udpMux = $udpMux;
     }
 
     public function setIcePortRange(?array $icePortRange): void

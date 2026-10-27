@@ -5,10 +5,12 @@ namespace Webrtc\ICE;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\ICE\Enum\IceRole;
 use Webrtc\ICE\Enum\TransportPolicyType;
+use Webrtc\STUN\UdpMux;
 
 class RTCICESetting
 {
     private ?array $icePortRange = null;
+    private ?UdpMux $udpMux = null;
     private TransportPolicyType $transportPolicy = TransportPolicyType::ALL;
     private ?array $nat1to1 = null;
 
@@ -34,6 +36,20 @@ class RTCICESetting
         }
 
         $this->icePortRange = [$minPort, $maxPort];
+    }
+
+    public function getUdpMux(): ?UdpMux
+    {
+        return $this->udpMux;
+    }
+
+    /**
+     * Gathers host candidates on the mux's one shared port instead of a port per connection. The
+     * port range is ignored while a mux is set.
+     */
+    public function setUdpMux(?UdpMux $udpMux): void
+    {
+        $this->udpMux = $udpMux;
     }
 
     public function getTransportPolicy(): TransportPolicyType

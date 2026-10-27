@@ -53,6 +53,7 @@ class RTCIceGatherer extends EventEmitter implements RTCIceGathererInterface
 
         $this->iceConnection = new RTCIceConnection($protocolParser->getIceConnectionConfiguration(), $setting->getIceRole());
         $this->iceConnection->setIcePortRange($setting->getIcePortRange());
+        $this->iceConnection->setUdpMux($setting->getUdpMux());
         $this->iceConnection->setTransportPolicy($setting->getTransportPolicy());
         $this->iceConnection->setRemoteIsLite($setting->isIceLite());
         $this->iceConnection->setNat1to1($setting->getNat1to1());
