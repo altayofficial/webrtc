@@ -16,6 +16,7 @@ use React\EventLoop\LoopInterface;
 use Throwable;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\Exception\RuntimeException;
+use function array_key_first;
 use function count;
 use function ord;
 use function str_contains;
@@ -57,6 +58,15 @@ class UdpMux
 
     /** @var array<string, MuxedSocket> transaction id => the socket that sent the request */
     private array $transactions = [];
+
+    /** Same idea as MAX_TRANSACTIONS, a reply only ever needs the peers that asked recently */
+    private const MAX_UNROUTED_PEERS = 4096;
+
+    /** @var (\Closure(string $data, string $peer): void)|null */
+    private ?\Closure $unrouted = null;
+
+    /** @var array<string, string> remote address => host it last reached us on, so replies leave from there */
+    private array $unroutedPeers = [];
 
     private LoopInterface $loop;
 
@@ -158,7 +168,42 @@ class UdpMux
         }
 
         $owner ??= $this->addresses[$host][$peer] ?? null;
-        $owner?->receive($data, $peer);
+        if ($owner !== null) {
+            $owner->receive($data, $peer);
+        } elseif ($this->unrouted !== null) {
+            if (count($this->unroutedPeers) >= self::MAX_UNROUTED_PEERS) {
+                $this->unroutedPeers = [];
+            }
+            $this->unroutedPeers[$peer] = $host;
+            ($this->unrouted)($data, $peer);
+        }
+    }
+
+    /**
+     * Hands every datagram no agent claims to $handler instead of dropping it, so something else,
+     * like a query protocol, can live on the shared port too. Pass null to go back to dropping.
+     *
+     * @param (\Closure(string $data, string $peer): void)|null $handler
+     */
+    public function onUnrouted(?\Closure $handler): void
+    {
+        $this->unrouted = $handler;
+        if ($handler === null) {
+            $this->unroutedPeers = [];
+        }
+    }
+
+    /**
+     * Sends a datagram that belongs to no agent, usually a reply to one onUnrouted() handed out. It
+     * leaves from the host that peer last reached us on, or the first bound one if it never did.
+     */
+    public function sendUnrouted(string $data, string $peer): void
+    {
+        $host = $this->unroutedPeers[$peer] ?? array_key_first($this->sockets);
+        if ($host === null) {
+            return;
+        }
+        ($this->sockets[$host] ?? null)?->send($data, $peer);
     }
 
     /**
@@ -264,5 +309,6 @@ class UdpMux
         $this->muxed = [];
         $this->addresses = [];
         $this->transactions = [];
+        $this->unroutedPeers = [];
     }
 }
