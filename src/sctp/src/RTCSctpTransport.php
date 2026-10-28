@@ -1282,7 +1282,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
             // Update RTO estimate
             if ($done === 1 && $schunk->getAttributes()->sentCount === 1) {
-                $this->updateRto(time() - $schunk->getAttributes()->sentTime);
+                // sentTime comes from microtime(true), so the clock here has to match or the sample is garbage
+                $this->updateRto(microtime(true) - $schunk->getAttributes()->sentTime);
             }
         }
 
