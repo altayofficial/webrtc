@@ -151,6 +151,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
     private ?float $srtt = null;
     private ?float $rttvar = null;
+    private ?float $lastPacketReceivedAt = null;
 
     // Reconfiguration properties
     /** @var int[] */
@@ -678,6 +679,18 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     }
 
     /**
+     * When the peer last sent a packet that passed the verification tag check, from microtime(true).
+     * SACKs and heartbeats count too, so this keeps moving while the peer's application is busy
+     * and sends no DATA of its own.
+     *
+     * @return float|null Null until the first packet arrives.
+     */
+    public function getLastPacketReceivedAt(): ?float
+    {
+        return $this->lastPacketReceivedAt;
+    }
+
+    /**
      * Get the last received TSN from the peer.
      *
      * @return int|null The last received TSN or null if not available.
@@ -997,6 +1010,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
             $this->log(sprintf("Bad verification tag %d vs %d", $verificationTag, $expectedTag));
             return;
         }
+        $this->lastPacketReceivedAt = microtime(true);
 
         // Handle chunks. Whatever the application sends back from inside these callbacks stays in
         // the bundle rather than going out on its own, so the acknowledgement below can travel in
