@@ -83,6 +83,15 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     /** @var int Retransmissions per consent check, so one lost datagram or a slow peer doesn't count as a failure */
     private const CONSENT_RETRANSMISSIONS = 3;
 
+    /**
+     * @var int Retransmissions per connectivity check (RFC 8445 section 14.3), 15.5 seconds in all. With a single
+     *          try a check gave up after half a second, and once every pair had failed the agent declared ICE failed
+     *          and closed. A peer behind NAT that only offers host candidates can only be reached through the
+     *          peer reflexive pair its own checks create, and those checks often land after that half second - so
+     *          the agent was gone by the time the only working path showed up.
+     */
+    private const CHECK_RETRANSMISSIONS = 4;
+
     /** @var int Interval between consent checks in seconds */
     private const CONSENT_INTERVAL = 5;
 
@@ -1184,7 +1193,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
         $message = $this->buildBindingMessage($pair, true);
         $remoteAddress = implode(":", $pair->getRemoteAddress());
 
-        $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword)
+        $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword, self::CHECK_RETRANSMISSIONS)
             ->then(function () use ($pair) {
                 $pair->setNominated(true);
                 $this->markPairSucceeded($pair);
@@ -1235,7 +1244,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
         $message = $this->buildBindingMessage($pair, $nominate);
         $remoteAddress = implode(":", $pair->getRemoteAddress());
 
-        $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword)
+        $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword, self::CHECK_RETRANSMISSIONS)
             ->then(fn($res) => $this->handleCheckBinding($res[1], $pair, $nominate))
             ->catch(fn($e) => $this->handleBindingError($e, $pair, $message));
     }
