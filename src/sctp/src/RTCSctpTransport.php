@@ -124,6 +124,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
     private bool $fastRecoveryTransmit = false;
     private ?ForwardTsnChunk $forwardTsnChunk = null;
     private int $flightSize = 0;
+    /** @var int How much more the peer said it can buffer, minus what we sent since it said so */
+    private int $peerRwnd = 0;
 
     private int $lastSackedTsn;
     private int $advancedPeerAckTsn;
@@ -1264,6 +1266,8 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
 
         [$done, $doneBytes] = $this->handleAcknowledgedData();
         $loss = $this->handleGapBlocks($chunk);
+        // RFC 4960 6.2.1: a_rwnd counts nothing we still have in flight, so take that off
+        $this->peerRwnd = max(0, $chunk->getAdvertisedRwnd() - $this->flightSize);
 
         $this->adjustCongestionWindow($done, $doneBytes, $cwndFullyUtilized, $loss, $chunk);
         $this->handleDataChannelTimer($done);
@@ -1526,6 +1530,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         $this->remoteVerificationTag = $chunk->getInitiateTag();
 
         $this->ssthresh = $chunk->getAdvertisedRwnd();
+        $this->peerRwnd = $chunk->getAdvertisedRwnd();
         $this->setExtensions($chunk->getParams());
 
         $this->log(sprintf(
@@ -1618,6 +1623,7 @@ class RTCSctpTransport extends EventEmitter implements RTCSctpTransportInterface
         $this->reconfigResponseSeq = SctpUtility::tsnMinusOne($chunk->getInitialTsn());
         $this->remoteVerificationTag = $chunk->getInitiateTag();
         $this->ssthresh = $chunk->getAdvertisedRwnd();
+        $this->peerRwnd = $chunk->getAdvertisedRwnd();
         $this->setExtensions($chunk->getParams());
 
         $this->log(sprintf(

@@ -199,11 +199,16 @@ trait DataChannel
             }
         }
 
-        // Transmit from the outbound queue if we haven't reached the congestion window size
-        while (!$this->outboundQueue->isEmpty() && $this->flightSize < $cwnd) {
+        // Transmit from the outbound queue if we haven't reached the congestion window size. The
+        // peer's window caps it too (RFC 4960 6.1 rule A): a client busy loading the world stops
+        // draining its buffer, and anything past it just gets dropped and waits for T3.
+        // hmm, with nothing in flight one chunk still goes out, that's the zero window probe
+        while (!$this->outboundQueue->isEmpty() && $this->flightSize < $cwnd
+            && ($this->flightSize === 0 || $this->peerRwnd >= strlen($this->outboundQueue->bottom()->getUserData()))) {
             $chunk = $this->outboundQueue->dequeue();
             $this->sentQueue->enqueue($chunk);
             $this->flightSizeIncrease($chunk);
+            $this->peerRwnd = max(0, $this->peerRwnd - $chunk->getAttributes()->bookSize);
 
             // Update chunk counters and send the chunk
             $chunk->getAttributes()->sentCount += 1;
