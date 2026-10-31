@@ -45,6 +45,7 @@ use Webrtc\STUN\ReceiverInterface;
 use Webrtc\STUN\Stun;
 use Webrtc\STUN\StunInterface;
 use Webrtc\STUN\UdpMux;
+use Webrtc\STUN\Utils as StunUtils;
 use Webrtc\TURN\Turn;
 use Webrtc\TURN\TurnInterface;
 use function React\Async\async;
@@ -1134,7 +1135,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
     public function handleCheckBinding(string $address, RTCIceCandidatePair $pair, bool $nominate): void
     {
         // Validate source address
-        if ($address !== implode(":", $pair->getRemoteAddress())) {
+        if ($address !== StunUtils::formatAddress(...$pair->getRemoteAddress())) {
             $this->logger?->debug("Check $pair failed: source address mismatch");
             $this->markPairFailed($pair);
 
@@ -1182,7 +1183,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
         $this->logger?->info("Check $pair nominating pair");
         $this->nominating[] = $pair->getComponentId();
         $message = $this->buildBindingMessage($pair, true);
-        $remoteAddress = implode(":", $pair->getRemoteAddress());
+        $remoteAddress = StunUtils::formatAddress(...$pair->getRemoteAddress());
 
         $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword)
             ->then(function () use ($pair) {
@@ -1233,7 +1234,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
         $this->changeCandidatePairState($pair, RTCIceCandidatePairStats::IN_PROGRESS);
         $nominate = $this->isControllingRole() && !$this->remoteIsLite;
         $message = $this->buildBindingMessage($pair, $nominate);
-        $remoteAddress = implode(":", $pair->getRemoteAddress());
+        $remoteAddress = StunUtils::formatAddress(...$pair->getRemoteAddress());
 
         $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword)
             ->then(fn($res) => $this->handleCheckBinding($res[1], $pair, $nominate))
@@ -1641,7 +1642,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
 
             foreach ($this->nominated as $pair) {
                 $message = $this->buildBindingMessage($pair, false);
-                $remoteAddress = implode(":", $pair->getRemoteAddress());
+                $remoteAddress = StunUtils::formatAddress(...$pair->getRemoteAddress());
 
                 $pair->getProtocol()->request($message, $remoteAddress, $this->remotePassword, self::CONSENT_RETRANSMISSIONS)->then(function () use (&$lastConsentAt) {
                     $lastConsentAt = hrtime(true);
@@ -1770,7 +1771,7 @@ class RTCIceConnection extends EventEmitter implements RTCIceConnectionInterface
             $this->logger?->debug("Dropped a datagram for component $componentId, no candidate pair is nominated");
             return;
         }
-        $pair->getProtocol()->send($data, implode(":", $pair->getRemoteAddress()));
+        $pair->getProtocol()->send($data, StunUtils::formatAddress(...$pair->getRemoteAddress()));
     }
 
     /**

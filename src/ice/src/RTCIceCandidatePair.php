@@ -13,6 +13,7 @@ namespace Webrtc\ICE;
 
 use Webrtc\ICE\Enum\RTCIceCandidatePairStats;
 use Webrtc\STUN\IceConnectionProtocolInterface;
+use Webrtc\STUN\Utils as StunUtils;
 
 /**
  * RTCIceCandidatePair Class
@@ -188,7 +189,7 @@ class RTCIceCandidatePair
      */
     public function __toString(): string
     {
-        return sprintf("CandidatePair(Local Address: %s -> Remote Address: %s | State: %s)", implode(":", $this->getLocalAddress()), implode(":", $this->getRemoteAddress()), $this->state->name);
+        return sprintf("CandidatePair(Local Address: %s -> Remote Address: %s | State: %s)", StunUtils::formatAddress(...$this->getLocalAddress()), StunUtils::formatAddress(...$this->getRemoteAddress()), $this->state->name);
     }
 
     /**

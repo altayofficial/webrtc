@@ -39,4 +39,23 @@ class Utils
         $rest = $length % 4;
         return $rest === 0 ? 0 : 4 - $rest;
     }
+
+    /**
+     * An IP without the brackets a URI or a stream name puts around IPv6. Candidates, SDP and
+     * map keys want it bare, anything joining it with a port puts them back via formatAddress().
+     */
+    public static function bareHost(string $host): string
+    {
+        return trim($host, "[]");
+    }
+
+    /**
+     * "host:port" the way stream_socket_sendto() and stream_socket_server() take it, which for
+     * IPv6 means "[host]:port". Joining an IPv6 address with a plain colon gives one they reject.
+     */
+    public static function formatAddress(string $host, int|string $port): string
+    {
+        $host = self::bareHost($host);
+        return str_contains($host, ":") ? "[$host]:$port" : "$host:$port";
+    }
 }

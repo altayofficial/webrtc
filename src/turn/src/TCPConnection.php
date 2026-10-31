@@ -118,7 +118,7 @@ abstract class TCPConnection extends BaseProtocol
      */
     public function getLocalHost(): string
     {
-        return parse_url($this->getLocalAddress(), PHP_URL_HOST);
+        return trim((string) parse_url($this->getLocalAddress(), PHP_URL_HOST), "[]");
     }
 
     /**

@@ -26,6 +26,7 @@ use Webrtc\STUN\Enum\MessageMethod;
 use Webrtc\STUN\Exception\TransactionException;
 use Webrtc\STUN\Exception\TransactionExceptionInterface;
 use Webrtc\STUN\Message\Message;
+use Webrtc\ICE\Utils;
 use Webrtc\STUN\Message\MessageInterface;
 final class TurnConnectionConstants
 {
@@ -157,7 +158,7 @@ trait TurnConnection
         $deferred = new Deferred();
         $messageAttr = [
             MessageAttribute::CHANNEL_NUMBER->name => $channelNumber,
-            MessageAttribute::XOR_PEER_ADDRESS->name => explode(":", $address)
+            MessageAttribute::XOR_PEER_ADDRESS->name => Utils::parseAddressToHostPort($address)
         ];
         $message = Message::new(MessageClass::REQUEST, MessageMethod::CHANNEL_BIND, $messageAttr);
 

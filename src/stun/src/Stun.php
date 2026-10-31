@@ -202,10 +202,10 @@ class Stun extends Datagram implements StunInterface
         // instead of through the promise based factory. await() would run the event loop nested
         // inside whatever callback triggered gathering, and a nested run can consume the outer
         // driver's pending stop callback - which aborts the await before the socket ever resolves.
-        $address = "udp://$host:$port";
+        $address = "udp://" . Utils::formatAddress($host, $port);
         $stream = @stream_socket_server($address, $errno, $errstr, STREAM_SERVER_BIND);
         if ($stream === false) {
-            throw new RuntimeException(sprintf("Could not bind to %s - %s", "$host:$port", $errstr), $errno);
+            throw new RuntimeException(sprintf("Could not bind to %s - %s", $address, $errstr), $errno);
         }
 
         try {
@@ -213,7 +213,7 @@ class Stun extends Datagram implements StunInterface
         } catch (Throwable $e) {
             @fclose($stream);
             throw new RuntimeException(
-                sprintf("Could not bind to %s - %s", "$host:$port", $e->getMessage()),
+                sprintf("Could not bind to %s - %s", $address, $e->getMessage()),
                 $e->getCode(),
                 $e
             );
@@ -240,7 +240,7 @@ class Stun extends Datagram implements StunInterface
         shuffle($ports);
 
         foreach ($ports as $port) {
-            $socket = @stream_socket_server("udp://$host:$port", $errno, $errstr, STREAM_SERVER_BIND);
+            $socket = @stream_socket_server("udp://" . Utils::formatAddress($host, $port), $errno, $errstr, STREAM_SERVER_BIND);
             if ($socket) {
                 fclose($socket);
                 return $port;

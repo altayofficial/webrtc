@@ -19,7 +19,6 @@ use Webrtc\Exception\RuntimeException;
 use function array_key_first;
 use function count;
 use function ord;
-use function str_contains;
 use function strlen;
 use function strpos;
 use function substr;
@@ -92,6 +91,8 @@ class UdpMux
      */
     public function open(string $host, \Closure $localUfrag): MuxedSocket
     {
+        // yeah, gathering hands IPv6 hosts over bracketed, everything else bare, so key by the bare one
+        $host = Utils::bareHost($host);
         $socket = $this->listen($host);
         $muxed = new MuxedSocket($this, $host, $socket->getLocalAddress(), $localUfrag);
         $this->muxed[$host][spl_object_id($muxed)] = $muxed;
@@ -107,6 +108,7 @@ class UdpMux
      */
     public function listen(string $host): DrainingSocket
     {
+        $host = Utils::bareHost($host);
         return $this->sockets[$host] ?? $this->bind($host);
     }
 
@@ -115,7 +117,7 @@ class UdpMux
      */
     private function bind(string $host): DrainingSocket
     {
-        $address = str_contains($host, ":") ? "udp://[$host]:$this->port" : "udp://$host:$this->port";
+        $address = "udp://" . Utils::formatAddress($host, $this->port);
         $stream = @stream_socket_server($address, $errno, $errstr, STREAM_SERVER_BIND);
         if ($stream === false) {
             throw new RuntimeException("Could not bind the shared ICE port $address - $errstr", $errno);

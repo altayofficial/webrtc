@@ -215,7 +215,8 @@ abstract class Datagram extends BaseProtocol
         }
         $address = parse_url($address);
 
-        $this->localHost = $address['host'];
+        // hmm, parse_url keeps the brackets around an IPv6 host, and that host ends up in candidates
+        $this->localHost = Utils::bareHost($address['host']);
         $this->localPort = $address['port'];
     }
 }
